@@ -1,0 +1,19 @@
+package com.kkl.kklplus.b2b.viomi.http.response;
+
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class AgendaOrderResponseData extends ResponseData{
+
+    private List<AgendaOrder> data;
+
+    @Data
+    public static class AgendaOrder{
+        private String guid;
+        private String process_type;
+        private String created_at;
+        private String changed_at;
+    }
+}

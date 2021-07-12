@@ -1,0 +1,382 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.OrderInfoMapper" >
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_order(
+        	kkl_order_no,
+        	order_number,
+			operator,
+			remarks,
+			sub_type,
+			contacts,
+			contacts_phone,
+			address,
+			address_detail,
+			source,
+			payment_object,
+			expected_service_time,
+			type,
+			complain_order_number,
+			complain_network_number,
+			uniqueid,
+			kt_product,
+			create_by,
+			create_date,
+			quarter,
+			product_name,
+			product_model,
+			product_type,
+			product_big_type,
+			product_69_code,
+			mi_sn,
+			mi_purchase_channel,
+			mi_order_number,
+			mi_purchase_Time,
+			inner_guarantee,
+			send_customer_courier_company,
+			send_customer_logistics_number
+		) VALUES (
+			#{kklOrderNo},
+			#{orderNumber},
+			#{operator},
+			#{remarks},
+			#{subType},
+			#{contacts},
+			#{contactsPhone},
+			#{address},
+			#{addressDetail},
+			#{source},
+			#{paymentObject},
+			#{expectedServiceTime},
+			#{type},
+			#{complainOrderNumber},
+			#{complainNetworkNumber},
+			#{uniqueid},
+			#{ktProductJson},
+			#{createById},
+			#{createDt},
+			#{quarter},
+			#{productName},
+			#{productModel},
+			#{productType},
+			#{productBigType},
+			#{product69Code},
+		    #{miSn},
+		  	#{miPurchaseChannel},
+			#{miOrderNumber},
+			#{miPurchaseTime},
+			#{innerGuarantee},
+			#{sendCustomerCourierCompany},
+			#{sendCustomerLogisticsNumber}
+		)
+    </insert>
+	<update id="updateTransferResult">
+		UPDATE
+			viomi_order
+		SET
+		process_flag = #{processFlag},
+		process_time = process_time + 1,
+		<if test="kklOrderId != null">
+			kkl_order_id = #{kklOrderId},
+		</if>
+		<if test="processFlag != 4">
+			process_comment = #{processComment},
+		</if>
+			update_date = #{updateDt},
+			update_by = #{updateById}
+		WHERE
+		id = #{id}
+	</update>
+	<update id="cancelledOrder">
+		UPDATE
+			viomi_order
+		SET
+			process_flag = #{processFlag},
+			process_time = process_time+1,
+			update_date = #{updateDt},
+			process_comment = #{processComment}
+			<if test="processFlag != null and processFlag == 5">
+				,order_status = 30
+			</if>
+			<if test="updater != null">
+				,update_by = #{updater}
+			</if>
+		WHERE
+			id = #{id}
+	</update>
+	<select id="getIdByOrderNumber" resultType="java.lang.Long">
+        SELECT
+            id
+        FROM
+            viomi_order
+        WHERE
+            order_number = #{orderNumber}
+            AND order_status != 30
+        LIMIT 1
+    </select>
+	<select id="getList" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+			id,
+			order_number,
+			operator,
+			remarks,
+			sub_type,
+			contacts,
+			contacts_phone,
+			address,
+			address_detail,
+			source,
+			payment_object,
+			expected_service_time,
+			type,
+			complain_order_number,
+			complain_network_number,
+			uniqueid,
+			kt_product,
+			create_by,
+			create_date as 'createDt',
+			quarter,
+			product_name,
+			product_model,
+			product_type,
+			product_big_type,
+			product_69_code as 'product69Code',
+			mi_sn,
+			mi_purchase_channel,
+			mi_order_number,
+			mi_purchase_Time,
+			inner_guarantee,
+			process_flag,
+			process_time,
+			process_comment,
+			kkl_order_no,
+			send_customer_courier_company,
+			send_customer_logistics_number
+		FROM
+			viomi_order
+		<where>
+			AND process_flag BETWEEN 0 AND 3
+			AND type in('安装','维修','鉴定','换货','退货')
+			<if test="processFlags != null">
+				AND process_flag in
+				<foreach collection="processFlags"  item="processFlag" open="(" close=")" separator=",">
+					#{processFlag.value}
+				</foreach>
+			</if>
+			<if test="userName != null and userName != ''">
+				AND contacts LIKE CONCAT(#{userName}, '%')
+			</if>
+			<if test="userMobile != null and userMobile != ''">
+				AND contacts_phone LIKE CONCAT(#{userMobile}, '%')
+			</if>
+			<if test="parentBizOrderId != null and parentBizOrderId != ''">
+				AND order_number LIKE CONCAT(#{parentBizOrderId}, '%')
+			</if>
+			<if test="userAddress != null and userAddress != ''">
+				AND CONCAT(address,address_details) LIKE CONCAT('%', #{userAddress}, '%')
+			</if>
+			<choose>
+				<when test="beginCreateDt != null ">
+					<choose>
+						<when test="endCreateDt != null">
+							AND create_date between #{beginCreateDt} and #{endCreateDt}
+						</when>
+						<otherwise>
+							AND create_date >= #{beginCreateDt}
+						</otherwise>
+					</choose>
+				</when>
+				<otherwise>
+					<if test="endCreateDt != null">
+						AND create_date &lt;=  #{endCreateDt}
+					</if>
+				</otherwise>
+			</choose>
+		</where>
+		ORDER BY id
+	</select>
+	<select id="findOrdersProcessFlag" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+			id,
+			order_number,
+			process_flag
+		FROM
+			viomi_order
+		<where>
+			<if test="results != null and results.size > 0">
+				id in
+				<foreach collection="results" item="result" open="(" close=")" separator=",">
+					#{result.b2bOrderId}
+				</foreach>
+			</if>
+		</where>
+		<if test="results == null or results.size == 0">
+			limit 0
+		</if>
+	</select>
+    <select id="getOrderByOrderNumber" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+            id,
+            order_status,
+            order_number,
+            kkl_order_id,
+            quarter,
+            type,
+			sub_type,
+			viomi_status,
+			viomi_sub_status
+        FROM
+            viomi_order
+        WHERE
+            order_number = #{orderNumber}
+        ORDER BY id DESC
+        LIMIT 1
+	</select>
+	<select id="getOrderNumberByKklOrderId" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+			id,
+			order_number
+        FROM
+            viomi_order
+        WHERE
+            kkl_order_id = #{kklOrderId}
+        LIMIT 1
+	</select>
+
+	<select id ="getOrderStatusByOrderId" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT  id,
+				order_status,
+				order_number,
+				type,
+				sub_type,
+				viomi_status,
+				viomi_sub_status,
+				kkl_order_id
+		FROM 	viomi_order
+		WHERE id = #{orderId}
+	</select>
+
+
+	<update id="updateOrderStatus">
+		UPDATE  viomi_order
+		SET order_status = #{orderStatus},
+		    viomi_status = #{viomiStatus},
+		    viomi_sub_status = #{viomiSubStatus},
+		    <if test="apiExceptionStatus != null">
+				api_exception_status = #{apiExceptionStatus},
+			</if>
+			<if test="firstExceptionId != null">
+				first_exception_id = #{firstExceptionId},
+			</if>
+		    update_by = #{updateById},
+		    update_date = #{updateDt}
+		WHERE id = #{id}
+	</update>
+
+	<update id ="updateException">
+		UPDATE  viomi_order
+		SET
+			<if test="apiExceptionStatus != null">
+		    	api_exception_status = #{apiExceptionStatus},
+			</if>
+		    <if test="firstExceptionId != null">
+				first_exception_id = #{firstExceptionId},
+			</if>
+		    update_by = #{updateById},
+		    update_date = #{updateDt}
+		WHERE id = #{id} and api_exception_status = 0
+	</update>
+
+	<update id="updateNextStepException">
+		UPDATE  viomi_order
+		SET
+			<if test="apiExceptionStatus != null">
+				api_exception_status = #{apiExceptionStatus},
+			</if>
+				first_exception_id = #{firstExceptionId},
+			<if test="viomiStatus">
+				viomi_status = #{viomiStatus},
+			</if>
+			<if test="viomiSubStatus">
+				viomi_sub_status = #{viomiSubStatus},
+			</if>
+			<if test="orderStatus != null and orderStatus >0">
+				order_status = #{orderStatus},
+			</if>
+			update_by = #{updateById},
+			update_date = #{updateDt}
+		WHERE id = #{id}
+	</update>
+
+	<select id="getOrderInfoList" resultType="com.kkl.kklplus.entity.viomi.sd.VioMiExceptionOrder">
+		SELECT
+		id,
+		kkl_order_no,
+		order_number,
+		operator,
+		remarks,
+		sub_type,
+		contacts,
+		contacts_phone,
+		order_status,
+		viomi_status,
+		viomi_sub_status,
+		address,
+		address_detail,
+		source,
+		payment_object,
+		expected_service_time,
+		type,
+		complain_order_number,
+		complain_network_number,
+		uniqueid,
+		create_by,
+		quarter,
+		product_name,
+		product_model,
+		product_type,
+		product_big_type,
+		product_69_code,
+		mi_sn,
+		mi_purchase_channel,
+		mi_order_number,
+		mi_purchase_Time,
+		inner_guarantee,
+		send_customer_courier_company,
+		send_customer_logistics_number,
+		create_date as createDt,
+		update_date as updateDt
+		FROM 	viomi_order
+		<where>
+		<if test="kklOrderNo != null and kklOrderNo != ''">
+		 and kkl_order_no = #{kklOrderNo}
+		</if>
+		<if test="orderNumber != null and orderNumber != ''">
+			and order_number = #{orderNumber}
+		</if>
+		<if test="beginUpdateDt != null and endUpdateDt != null ">
+			AND update_date between #{beginUpdateDt} and #{endUpdateDt}
+		</if>
+			and api_exception_status = 1
+		</where>
+
+
+	</select>
+
+
+	<select id="getOrderById" resultType="com.kkl.kklplus.entity.viomi.sd.VioMiExceptionOrder">
+		SELECT
+		id,
+		kkl_order_no,
+		order_number,
+		kkl_order_id,
+		api_exception_status,
+		first_exception_id,
+		quarter
+		from viomi_order
+		where id = #{id}
+	</select>
+
+
+
+</mapper>

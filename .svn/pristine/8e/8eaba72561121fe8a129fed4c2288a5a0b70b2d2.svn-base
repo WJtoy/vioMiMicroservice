@@ -1,0 +1,154 @@
+package com.kkl.kklplus.b2b.viomi.http.utils;
+
+import com.google.gson.FieldNamingPolicy;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.reflect.TypeToken;
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.config.B2BVioMIProperties;
+import com.kkl.kklplus.b2b.viomi.http.response.RefreshTokenResponseData;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.utils.SpringContextHolder;
+import com.kkl.kklplus.b2b.viomi.utils.VioMIUtils;
+import com.kkl.kklplus.starter.redis.utils.RedisDefaultDbNewUtils;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.*;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.retry.RecoveryCallback;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.support.RetryTemplate;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+public class OkHttpUtils {
+
+    private static final MediaType CONTENT_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
+
+    private static OkHttpClient okHttpClient = SpringContextHolder.getBean(OkHttpClient.class);
+
+    private static B2BVioMIProperties tooneProperties = SpringContextHolder.getBean(B2BVioMIProperties.class);
+
+    private static Gson gson = new GsonBuilder().setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES).create();;
+
+    @Autowired
+    private RedisDefaultDbNewUtils redisDefaultDbNewUtils;
+
+    private static final String REDIS_VIOMI_ACCESS_TOKEN = "viomi:access:token";
+    //redis过期时间
+    private static final Integer VIOMI_TOKEN_EXPIRE = 7100;
+    /**
+     * 调用云米接口(GET)
+     * @param dataClass
+     * @param <T>
+     * @return
+     */
+    public <T> ResponseBody<T> getSyncGenericNew(HttpUrl url, Class<T> dataClass) {
+        ResponseBody<T> responseBody = null;
+
+        B2BVioMIProperties.DataSourceConfig dataSourceConfig = tooneProperties.getDataSourceConfig();
+        if (dataSourceConfig != null) {
+            Request request = new Request.Builder()
+                    .url(url)
+                    .build();
+            Call call = okHttpClient.newCall(request);
+            try {
+                Response response = call.execute();
+                if (response.isSuccessful()) {
+                    if (response.body() != null) {
+                        String responseBodyJson = response.body().string();
+                        try {
+                            responseBody = gson.fromJson(responseBodyJson, new TypeToken<ResponseBody>() {
+                            }.getType());
+                            responseBody.setOriginalJson(responseBodyJson);
+                            if (responseBody.getErrorCode() == ResponseBody.ErrorCode.SUCCESS.code) {
+                                try {
+                                    T data = gson.fromJson(responseBodyJson, dataClass);
+                                    responseBody.setData(data);
+                                } catch (Exception e) {
+                                    return new ResponseBody<>(ResponseBody.ErrorCode.DATA_PARSE_FAILURE, e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            responseBody = new ResponseBody<>(ResponseBody.ErrorCode.JSON_PARSE_FAILURE, e);
+                            responseBody.setOriginalJson(responseBodyJson);
+                            return responseBody;
+                        }
+                    } else {
+                        responseBody = new ResponseBody<>(ResponseBody.ErrorCode.HTTP_RESPONSE_BODY_ERROR);
+                    }
+                } else {
+                    responseBody = new ResponseBody<>(ResponseBody.ErrorCode.HTTP_STATUS_CODE_ERROR);
+                }
+            } catch (Exception e) {
+                return new ResponseBody<>(ResponseBody.ErrorCode.REQUEST_INVOCATION_FAILURE, e);
+            }
+        } else {
+            responseBody = new ResponseBody<>(ResponseBody.ErrorCode.REQUEST_PARAMETER_FORMAT_ERROR);
+        }
+        return responseBody;
+    }
+    /**
+     * 调用云米接口(POST)
+     * @param command
+     * @param dataClass
+     * @param <T>
+     * @return
+     */
+    public <T> ResponseBody<T> postSyncGenericNew(OperationCommand command, Class<T> dataClass) {
+        ResponseBody<T> responseBody = null;
+        B2BVioMIProperties.DataSourceConfig dataSourceConfig = tooneProperties.getDataSourceConfig();
+        if (dataSourceConfig != null && command != null && command.getOpCode() != null &&
+                command.getReqBody() != null && command.getReqBody().getClass().getName().equals(command.getOpCode().reqBodyClass.getName())) {
+            String url = dataSourceConfig.getRequestMainUrl().concat(command.getOpCode().apiUrl);
+            command.getReqBody().setKey(dataSourceConfig.getKey());
+            String reqbodyJson = new Gson().toJson(command.getReqBody());
+
+            RequestBody requestBody = RequestBody.create(CONTENT_TYPE_JSON, reqbodyJson);   //请求体参数
+
+            Request request = new Request.Builder()
+                    .url(url)
+                    .post(requestBody)
+                    .build();
+            Call call = okHttpClient.newCall(request);
+            try {
+                Response response = call.execute();
+                if (response.isSuccessful()) {
+                    if (response.body() != null) {
+                        String responseBodyJson = response.body().string();
+                        try {
+                            responseBody = gson.fromJson(responseBodyJson, new TypeToken<ResponseBody>() {
+                            }.getType());
+                            responseBody.setOriginalJson(responseBodyJson);
+                            if (responseBody.getErrorCode() == ResponseBody.ErrorCode.SUCCESS.code) {
+                                try {
+                                    T data = gson.fromJson(responseBodyJson, dataClass);
+                                    responseBody.setData(data);
+                                } catch (Exception e) {
+                                    return new ResponseBody<>(ResponseBody.ErrorCode.DATA_PARSE_FAILURE, e);
+                                }
+                            }
+                        } catch (Exception e) {
+                            responseBody = new ResponseBody<>(ResponseBody.ErrorCode.JSON_PARSE_FAILURE, e);
+                            responseBody.setOriginalJson(responseBodyJson);
+                            return responseBody;
+                        }
+                    } else {
+                        responseBody = new ResponseBody<>(ResponseBody.ErrorCode.HTTP_RESPONSE_BODY_ERROR);
+                    }
+                } else {
+                    responseBody = new ResponseBody<>(ResponseBody.ErrorCode.HTTP_STATUS_CODE_ERROR);
+                }
+            } catch (Exception e) {
+                return new ResponseBody<>(ResponseBody.ErrorCode.REQUEST_INVOCATION_FAILURE, e);
+            }
+        } else {
+            responseBody = new ResponseBody<>(ResponseBody.ErrorCode.REQUEST_PARAMETER_FORMAT_ERROR);
+        }
+        return responseBody;
+    }
+
+
+}

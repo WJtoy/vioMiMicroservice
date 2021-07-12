@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.SysLogMapper">
+
+    <sql id="sysLogColumns">
+		a.id,
+		a.type,
+        a.user_agent,
+        a.request_uri,
+        a.method,
+        a.params,
+        a.exception,
+        a.title,
+        a.create_by,
+        a.create_date as 'createDt',
+        a.quarter
+	</sql>
+
+
+    <insert id="insert" parameterType="com.kkl.kklplus.b2b.viomi.entity.SysLog" keyProperty="id"
+            useGeneratedKeys="true">
+        INSERT INTO viomi_sys_log(
+			type,
+			create_by,
+			create_date,
+			user_agent,
+			request_uri,
+			method,
+			params,
+			exception,
+			title,
+			quarter
+		) VALUES (
+			#{type},
+			#{createById},
+			#{createDt},
+			#{userAgent},
+			#{requestUri},
+			#{method},
+			#{params},
+			#{exception},
+			#{title},
+			#{quarter}
+		)
+    </insert>
+
+    <select id="get" resultType="com.kkl.kklplus.b2b.viomi.entity.SysLog">
+        SELECT
+        <include refid="sysLogColumns"/>
+        FROM viomi_sys_log a
+        WHERE a.id = #{id}
+    </select>
+
+</mapper>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.B2BProcesslogMapper" >
+    <insert id="insert" parameterType="com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_b2b_processlog(
+			interface_name,
+			info_json,
+			process_comment,
+			process_flag,
+			process_time,
+			create_by,
+			create_date,
+			update_by,
+			update_date,
+			result_json,
+			quarter
+		) VALUES (
+			#{interfaceName},
+			#{infoJson},
+			#{processComment},
+			#{processFlag},
+			#{processTime},
+			#{createById},
+			#{createDt},
+			#{updateById},
+			#{updateDt},
+			#{resultJson},
+			#{quarter}
+		)
+    </insert>
+
+	<update id="updateProcessFlag">
+		UPDATE
+		viomi_b2b_processlog
+		SET
+			process_flag    = #{processFlag},
+			update_date     = #{updateDt},
+			result_json = #{resultJson}
+			<if test="processComment != null and processComment != ''">
+				,process_comment = #{processComment}
+			</if>
+		WHERE
+			id= #{id}
+	</update>
+
+	<select id="getList" resultType="com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog">
+		SELECT
+		id,
+		interface_name,
+		info_json,
+		result_json,
+		process_flag,
+		process_time,
+		process_comment,
+		create_by,
+		create_date as 'createDt',
+		update_by,
+		update_date as 'updateDt'
+		FROM  viomi_b2b_processlog
+		<where>
+			<if test="code != null and code != ''">
+				AND interface_name = #{code}
+			</if>
+			<if test="processLogSearchModel != null and processLogSearchModel.processFlag != null">
+				AND process_flag =#{processLogSearchModel.processFlag}
+			</if>
+            <if test="processLogSearchModel != null and processLogSearchModel.beginCreateDt!= null">
+                AND create_date >= #{processLogSearchModel.beginCreateDt}
+            </if>
+            <if test="processLogSearchModel != null and processLogSearchModel.endCreateDt!= null">
+                AND create_date &lt;= #{processLogSearchModel.endCreateDt}
+            </if>
+		</where>
+		ORDER By create_date DESC
+	</select>
+</mapper>

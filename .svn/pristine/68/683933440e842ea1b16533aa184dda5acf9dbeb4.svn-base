@@ -1,0 +1,46 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties;
+import com.kkl.kklplus.b2b.viomi.http.request.OrderRemarkRequestParam;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.service.B2BProcesslogService;
+import com.kkl.kklplus.b2b.viomi.service.SysLogService;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * @author Administrator
+ */
+@Slf4j
+@RestController
+@RequestMapping("/viomiOrderInfo")
+public class VioMiOrderInfoController {
+
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Autowired
+    private B2BVioMiProperties vioMiProperties;
+
+    @PostMapping("/test")
+    public MSResponse test() {
+        OrderRemarkRequestParam requestParam = new OrderRemarkRequestParam();
+        requestParam.setOrderNumber("");
+        requestParam.setInputuser("测试");
+        requestParam.setRemarks("测试");
+        OperationCommand command = OperationCommand.newInstance
+                (OperationCommand.OperationCode.OTHER_REMARK_ORDER, requestParam);
+        ResponseBody<ResponseBody> resBody = OkHttpUtils.postSyncGenericNew(command, ResponseBody.class);
+        return new MSResponse(new MSErrorCode(0,resBody.getOriginalJson()));
+    }
+}

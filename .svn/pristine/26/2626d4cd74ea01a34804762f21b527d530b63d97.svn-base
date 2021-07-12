@@ -1,0 +1,15 @@
+package com.kkl.kklplus.b2b.viomi.mapper;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMIUpdateOrder;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+@Mapper
+public interface VioMIUpdateOrderMapper {
+
+    void insert(VioMIUpdateOrder updateOrder);
+
+    void updateProcessFlag(VioMIUpdateOrder updateOrder);
+
+    Integer findAppointmentCount(@Param("guid") String guid);
+}

@@ -1,0 +1,40 @@
+package com.kkl.kklplus.b2b.viomi.entity;
+
+import lombok.Data;
+
+/**
+ * @Auther wj
+ * @Date 2020/10/29 10:09
+ */
+@Data
+public class VioMiApiLog {
+
+    private Long id;
+
+    private Long b2bOrderId;
+
+    private Integer operatingStatus;
+
+    private String interfaceName;
+
+    private String infoJson;
+
+    private String resultJson;
+
+    private Integer processFlag;
+
+    private Integer processTime;
+
+    private String processComment;
+
+    private Long createBy;
+
+    private Long createDt;
+
+    private Long updateBy;
+
+    private Long updateDt;
+
+    private String quarter;
+
+}

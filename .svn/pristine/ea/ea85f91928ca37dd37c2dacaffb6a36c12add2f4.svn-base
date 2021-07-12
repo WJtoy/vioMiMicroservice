@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMiApiLogMapper" >
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_b2b_apilog(
+            b2b_order_id,
+            operating_status,
+			interface_name,
+			info_json,
+			result_json,
+			process_comment,
+			process_flag,
+			process_time,
+			create_by,
+			create_date,
+			update_by,
+			update_date,
+			quarter
+		) VALUES (
+		    #{b2bOrderId},
+		    #{operatingStatus},
+			#{interfaceName},
+			#{infoJson},
+			#{resultJson},
+			#{processComment},
+			#{processFlag},
+			#{processTime},
+			#{createBy},
+			#{createDt},
+			#{updateBy},
+			#{updateDt},
+			#{quarter}
+		)
+    </insert>
+
+    <update id="updateViomiFlag">
+        UPDATE
+        viomi_b2b_apilog
+        SET
+        process_flag    = #{processFlag},
+        update_date     = #{updateDt},
+        result_json = #{resultJson}
+        <if test="processComment != null and processComment != ''">
+            ,process_comment = #{processComment}
+        </if>
+        WHERE
+        id= #{id}
+    </update>
+
+
+</mapper>

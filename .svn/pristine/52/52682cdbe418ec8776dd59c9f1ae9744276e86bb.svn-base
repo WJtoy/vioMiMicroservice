@@ -1,0 +1,86 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderHandle;
+import com.kkl.kklplus.b2b.viomi.service.VioMiOrderHandleService;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/order/handle")
+public class VioMiOrderHandleController {
+
+    @Autowired
+    private VioMiOrderHandleService vioMiOrderHandleService;
+
+    /**
+     * 派送师傅
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("planing")
+    public MSResponse<Integer> planing(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.planing(vioMiOrderHandle);
+    }
+
+    /**
+     * 预约上门
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("appointment")
+    public MSResponse<Integer> appointment(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return  vioMiOrderHandleService.appointment(vioMiOrderHandle);
+    }
+
+    /**
+     * 上门打卡
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("clockInHome")
+    public MSResponse<Integer> clockInHome(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.clockInHome(vioMiOrderHandle);
+    }
+
+    /**
+     * 处理完成
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("processComplete")
+    public MSResponse<Integer> processComplete(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.processComplete(vioMiOrderHandle);
+    }
+
+    /**
+     * 申请完单
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("applyFinished")
+    public MSResponse<Integer> applyFinished(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.applyFinished(vioMiOrderHandle);
+    }
+
+    /**
+     * 申请完单
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("orderReturnVisit")
+    public MSResponse<Integer> orderReturnVisit(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.orderReturnVisit(vioMiOrderHandle);
+    }
+
+
+
+
+
+}

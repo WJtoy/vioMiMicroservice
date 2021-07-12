@@ -1,0 +1,112 @@
+package com.kkl.kklplus.b2b.viomi.entity;
+
+import com.kkl.kklplus.entity.b2b.common.B2BBase;
+import lombok.Data;
+
+@Data
+public class VioMIOrderInfo extends B2BBase<VioMIOrderInfo>{
+
+    private String guid;
+
+    /**
+     * 快可立单号ID
+     */
+    private Long orderId;
+    /**
+     * 工单编号
+     */
+    private String objectId;
+    /**
+     *业务类型
+     */
+    private String processType;
+    /**
+     * 创建时间
+     */
+    private String createdAt;
+    /**
+     * 工单状态
+     */
+    private String orderStatus;
+    /**
+     * 起始名称
+     */
+    private String nameFirst;
+    /**
+     * 结尾名称
+     */
+    private String nameLast;
+    /**
+     * 联系电话
+     */
+    private String telephone;
+    /**
+     * 联系电话扩展（固定）
+     */
+    private String telephone1;
+    /**
+     * 省代码
+     */
+    private String region;
+    /**
+     * 市代码
+     */
+    private String cityNo;
+    /**
+     * 区代码
+     */
+    private String distrctNo;
+    /**
+     * 详细地址
+     */
+    private String street;
+    /**
+     * 品类名称
+     */
+    private String kindCode;
+    /**
+     * 故障现象
+     */
+    private String fault;
+    /**
+     * 故障原因
+     */
+    private String faultDetial;
+    /**
+     * 维修性质
+     */
+    private String warranty;
+    /**
+     * 备注
+     */
+    private String remark;
+    /**
+     * 跟进内容
+     */
+    private String zice;
+    /**
+     * 处理结果
+     */
+    private String cljg;
+    /**
+     * 购买日期
+     */
+    private String gmrq;
+    /**
+     * 购买渠道
+     */
+    private String gmqd;
+    /**
+     * 条形码
+     */
+    private String txm;
+    /**
+     * 预约日期
+     */
+    private String yyrq;
+    /**
+     * 预约时间
+     */
+    private String yysj;
+
+}

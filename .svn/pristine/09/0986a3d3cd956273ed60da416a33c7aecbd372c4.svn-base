@@ -1,0 +1,28 @@
+package com.kkl.kklplus.b2b.viomi.entity;
+
+public interface VioMiOrderHandleEnum {
+    enum ProcessFlag {
+        ACCEPT(0, "受理：接收成功，但是还未处理"),
+        EXECUTE(1, "执行：接收成功，正在执行业务数据处理"),
+        REJECT(2, "拒绝：接收成功，但是执行处理生成业务数据失败，业务数据不满足要求"),
+        FAILURE(3, "失败：接收成功，但是执行处理生成业务数据报错"),
+        SUCCESS(4, "成功：接收成功，并且执行处理生成业务数据成功"),
+        SUCCESSBUTREJECT(5, "成功：接收成功，拒单");
+
+        private int value;
+        private String label;
+
+        ProcessFlag(int value, String label) {
+            this.value = value;
+            this.label = label;
+        }
+
+        public int getValue() {
+            return value;
+        }
+
+        public String getLabel() {
+            return label;
+        }
+    }
+}

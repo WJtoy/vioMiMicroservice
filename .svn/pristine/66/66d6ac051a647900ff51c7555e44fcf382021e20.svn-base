@@ -1,0 +1,231 @@
+package com.kkl.kklplus.b2b.viomi.service;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderHandle;
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo;
+import com.kkl.kklplus.b2b.viomi.http.request.VioMiEngineer;
+import com.kkl.kklplus.b2b.viomi.http.request.VioMiHandleOrderRequest;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiHandleRequest;
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.mapper.VioMiOrderHandleMapper;
+import com.kkl.kklplus.b2b.viomi.utils.GsonUtils;
+import com.kkl.kklplus.b2b.viomi.utils.QuarterUtils;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+
+@Service
+@Slf4j
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public class VioMiOrderHandleService {
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Resource
+    private VioMiOrderHandleMapper vioMiOrderHandleMapper;
+
+    @Autowired
+    private OrderInfoService orderInfoService;
+
+    /**
+     * 派单/转派
+     * @param vioMiOrderHandle
+     */
+    @Transactional
+    public MSResponse planing(VioMiOrderHandle vioMiOrderHandle) {
+        VioMiOrderInfo vioMiOrderInfo = orderInfoService.getOrderStatusByOrderId(vioMiOrderHandle.getB2bOrderId());
+        boolean needPlaning = false;
+        if ((StringUtils.isBlank(vioMiOrderInfo.getViomiStatus()) && StringUtils.isBlank(vioMiOrderInfo.getViomiSubStatus())) ||
+                (vioMiOrderInfo.getViomiStatus().equals("预约上门") && vioMiOrderInfo.getViomiSubStatus().equals("转派师傅")) ||
+                (vioMiOrderInfo.getViomiStatus().equals("上门打卡") && vioMiOrderInfo.getViomiSubStatus().equals("转派师傅"))) {
+            needPlaning = true ;
+        }
+        // 添加一个工单处理数据
+        MSResponse msResponse;
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            VioMiHandleOrderRequest<VioMiEngineer> vioMiHandleOrderRequest = new VioMiHandleOrderRequest<>();
+            vioMiHandleOrderRequest.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            VioMiHandleRequest handleRequest = new VioMiHandleRequest();
+            handleRequest.setWay(vioMiOrderHandle.getWay());
+            handleRequest.setNode(vioMiOrderHandle.getNode());
+            handleRequest.setOperator(vioMiOrderHandle.getOperator());
+            handleRequest.setRemarks(vioMiOrderHandle.getRemarks());
+            vioMiHandleOrderRequest.setHandle(handleRequest);
+
+            // 师傅数据
+            VioMiEngineer vioMiEngineer = new VioMiEngineer();
+            vioMiEngineer.setEngineerName(vioMiOrderHandle.getEngineerName());
+            vioMiEngineer.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+            vioMiHandleOrderRequest.setData(vioMiEngineer);
+
+            msResponse = pushMessageToVioMi(vioMiHandleOrderRequest, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo updateVioMiOrderInfo = new VioMiOrderInfo();
+                updateVioMiOrderInfo.setB2bOrderId(vioMiOrderHandle.getB2bOrderId());
+                updateVioMiOrderInfo.setOrderStatus(0);
+                updateVioMiOrderInfo.setViomiStatus("1");
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(updateVioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+    /**
+     * 预约上门
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @Transactional
+    public MSResponse appointment(VioMiOrderHandle vioMiOrderHandle) {
+        // 判断当前状态是否应当为预约上门
+
+        // 添加一个工单处理数据
+        MSResponse msResponse;
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            VioMiHandleOrderRequest<VioMiEngineer> vioMiHandleOrderRequest = new VioMiHandleOrderRequest<>();
+            vioMiHandleOrderRequest.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            VioMiHandleRequest handleRequest = new VioMiHandleRequest();
+            handleRequest.setWay(vioMiOrderHandle.getWay());
+            handleRequest.setNode(vioMiOrderHandle.getNode());
+            handleRequest.setOperator(vioMiOrderHandle.getOperator());
+            handleRequest.setRemarks(vioMiOrderHandle.getRemarks());
+            vioMiHandleOrderRequest.setHandle(handleRequest);
+
+            // 师傅数据
+            VioMiEngineer vioMiEngineer = new VioMiEngineer();
+            vioMiEngineer.setEngineerName(vioMiOrderHandle.getEngineerName());
+            vioMiEngineer.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+            vioMiHandleOrderRequest.setData(vioMiEngineer);
+
+            msResponse = pushMessageToVioMi(vioMiHandleOrderRequest, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo vioMiOrderInfo = new VioMiOrderInfo();
+                vioMiOrderInfo.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+                vioMiOrderInfo.setOrderStatus(0);
+                vioMiOrderInfo.setViomiStatus("1");
+                vioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                vioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(vioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+    /**
+     * 推送工单办理消息给云米
+     * @param vioMiHandleOrderRequest
+     * @param createById
+     * @param updateById
+     * @param orderHandleId
+     * @return
+     */
+    public MSResponse pushMessageToVioMi(VioMiHandleOrderRequest vioMiHandleOrderRequest, Long createById, Long updateById, Long orderHandleId) {
+        // 获取工单状态
+        String strDataType = vioMiHandleOrderRequest.getHandle().getWay();
+        String strOrderNumber = vioMiHandleOrderRequest.getOrderNumber();
+
+        MSResponse msResponse = new MSResponse();
+        msResponse.setErrorCode(MSErrorCode.SUCCESS);
+
+        // 生成发送Log
+        B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+        b2BProcesslog.setDataType(strDataType);
+        b2BProcesslog.setInterfaceName(OperationCommand.OperationCode.ORDER_HANDLE.apiUrl);
+        b2BProcesslog.setProcessTime(0);
+        b2BProcesslog.setCreateById(createById);
+        b2BProcesslog.setUpdateById(updateById);
+        b2BProcesslog.preInsert();
+        b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDt()));
+
+        // 更新OrderHandle
+        VioMiOrderHandle vioMiOrderHandle = new VioMiOrderHandle();
+        vioMiOrderHandle.setId(orderHandleId);
+        vioMiOrderHandle.setUpdateById(updateById);
+        vioMiOrderHandle.preUpdate();
+        vioMiOrderHandle.setQuarter(QuarterUtils.getQuarter(vioMiOrderHandle.getUpdateDate()));
+        vioMiOrderHandle.setProcessTime(0);
+
+        // 生成要发送的json对象
+        String infoJson = GsonUtils.getInstance().toJson(vioMiHandleOrderRequest);
+        b2BProcesslog.setInfoJson(infoJson);
+        try {
+            b2BProcesslogService.insert(b2BProcesslog);
+            OperationCommand command = OperationCommand.newInstance(OperationCommand.OperationCode.ORDER_HANDLE, vioMiHandleOrderRequest);
+            ResponseBody<ResponseBody> resBody = OkHttpUtils.postSyncGenericNew(command, ResponseBody.class);
+            b2BProcesslog.setResultJson(resBody.getOriginalJson());
+            ResponseBody data = resBody.getData();
+            if( resBody.getErrorCode() == ResponseBody.ErrorCode.SUCCESS.code && data != null){
+                if (data.getErrorCode().equals(0)) { // 0 -- 成功
+                    b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+
+                    vioMiOrderHandle.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    vioMiOrderHandle.setProcessComment(data.getErrorMsg());
+                    vioMiOrderHandleMapper.updateProcessFlag(vioMiOrderHandle);
+
+                    msResponse.setMsg(data.getErrorMsg());
+                    return msResponse;
+                }
+            }
+            // 1：签名无效 2：参数有误3：流程错误 4：办理方式错误 5：办理参数有误 6：验收码错误 7：SN码有误
+            String errorStr = data != null ? data.getErrorMsg() : resBody.getErrorMsg();
+            Integer errorCode = data != null ? data.getErrorCode() : resBody.getErrorCode();
+            errorStr = StringUtils.left(errorStr,255);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(errorStr);
+            msResponse.setThirdPartyErrorCode(new MSErrorCode(errorCode,errorStr));
+            //errorCode大于等于90000300，设置错误编码，便于调用方重试
+            if(errorCode >= ResponseBody.ErrorCode.REQUEST_INVOCATION_FAILURE.code){
+                msResponse.setCode(errorCode);
+                msResponse.setMsg(errorStr);
+            }
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+
+            vioMiOrderHandle.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            vioMiOrderHandle.setProcessComment(errorStr);
+            vioMiOrderHandleMapper.updateProcessFlag(vioMiOrderHandle);
+
+            return msResponse;
+        }catch (Exception e) {
+            String errorMsg = StringUtils.left(e.getMessage(), 255);
+            msResponse.setErrorCode(MSErrorCode.FAILURE);
+            msResponse.setMsg(errorMsg);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(errorMsg);
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+            log.error("errorStr:{}", e.getMessage());
+            sysLogService.insert(1L, infoJson, e.getMessage(), "调用云米工单处理接口失败", String.format("orderNumber:%s,handleWay:%s",strOrderNumber,strDataType), "POST");
+            return msResponse;
+        }
+    }
+
+}

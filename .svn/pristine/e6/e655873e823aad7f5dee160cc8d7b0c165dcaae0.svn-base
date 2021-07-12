@@ -1,0 +1,40 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderRemark;
+import com.kkl.kklplus.b2b.viomi.service.OrderCancelService;
+import com.kkl.kklplus.b2b.viomi.service.OrderRemarkService;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.viomi.sd.VioMiOrderCancel;
+import io.swagger.annotations.ApiOperation;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * describe:
+ *
+ * @author chenxj
+ * @date 2020/09/21
+ */
+@Slf4j
+@RestController
+@RequestMapping("/order/cancel")
+public class VioMiOrderCancelController {
+
+    @Autowired
+    private OrderCancelService orderCancelService;
+
+    @ApiOperation("取消工单")
+    @PostMapping("")
+    public MSResponse cancel(@RequestBody VioMiOrderCancel cancel) {
+
+        return orderCancelService.cancelApiRequest(cancel);
+    }
+
+    @GetMapping("/updateProcessFlag/{id}")
+    public MSResponse updateProcessFlag(@PathVariable("id") Long id){
+        orderCancelService.updateProcessFlag(id);
+        return new MSResponse(MSErrorCode.SUCCESS);
+    }
+}

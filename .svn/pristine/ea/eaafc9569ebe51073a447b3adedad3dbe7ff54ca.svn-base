@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMIOrderInfoMapper" >
+
+	<insert id="insertOrderInfo" useGeneratedKeys="true" keyProperty="id">
+		insert into viomi_order_info(
+			guid,
+			object_id,
+			process_type,
+			created_at,
+			order_status,
+			name_first,
+			name_last,
+			telephone,
+			telephone1,
+			region,
+			city_no,
+			distrct_no,
+			street,
+			kind_code,
+			fault,
+			fault_detial,
+			warranty,
+			remark,
+			zice,
+			cljg,
+			gmrq,
+			gmqd,
+			txm,
+			yyrq,
+			yysj,
+			process_flag,
+			process_time,
+			create_by,
+			create_date,
+			update_by,
+			update_date,
+			quarter
+		)VALUES (
+			#{guid},
+			#{objectId},
+			#{processType},
+			#{createdAt},
+			#{orderStatus},
+			#{nameFirst},
+			#{nameLast},
+			#{telephone},
+			#{telephone1},
+			#{region},
+			#{cityNo},
+			#{distrctNo},
+			#{street},
+			#{kindCode},
+			#{fault},
+			#{faultDetial},
+			#{warranty},
+			#{remark},
+			#{zice},
+			#{cljg},
+			#{gmrq},
+			#{gmqd},
+			#{txm},
+			#{yyrq},
+			#{yysj},
+			#{processFlag},
+			#{processTime},
+			#{createById},
+			#{createDt},
+			#{updateById},
+			#{updateDt},
+			#{quarter}
+		)
+	</insert>
+
+	<select id="findOrderByGuid" resultType="java.lang.Long" >
+		SELECT
+			id
+		FROM
+			viomi_order_info
+		WHERE
+			guid = #{guid}
+		limit 1
+	</select>
+
+	<select id="findOrderInfoByGuid" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo">
+		SELECT
+			region,
+			city_no,
+			process_type,
+			warranty,
+			kind_code,
+			gmrq,
+			gmqd
+		FROM
+			viomi_order_info
+		WHERE
+			guid = #{guid}
+		limit 1
+	</select>
+
+	<select id="findOrdersProcessFlag" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo">
+		SELECT
+		id,
+		guid,
+		process_flag
+		FROM
+		viomi_order_info
+		<where>
+			<if test="orderNos != null and orderNos.size > 0">
+				order_no in
+				<foreach collection="orderNos" item="o" open="(" close=")" separator=",">
+					#{o.b2bOrderNo}
+				</foreach>
+			</if>
+		</where>
+		<if test="orderNos == null or orderNos.size == 0">
+			limit 0
+		</if>
+	</select>
+
+	<update id="updateTransferResult" >
+		UPDATE
+			viomi_order_info
+		SET
+			process_flag = #{processFlag},
+			process_time = process_time+1,
+			order_id = #{orderId},
+			process_comment = #{processComment},
+			update_date = #{updateDt}
+	  	WHERE
+	  		id = #{id}
+	</update>
+
+	<select id="getList" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo">
+		SELECT
+		guid,
+		name_first,
+		name_last,
+		telephone,
+		telephone1,
+		region,
+		city_no,
+		distrct_no,
+		street,
+		kind_code,
+		process_type,
+		remark,
+		process_flag,
+		process_time,
+		process_comment,
+		quarter,
+		create_date as 'createDt'
+		FROM
+		viomi_order_info
+		<where>
+			<choose>
+				<when test="beginCreateDt != null ">
+					<choose>
+						<when test="endCreateDt != null">
+							AND create_date between #{beginCreateDt} and #{endCreateDt}
+						</when>
+						<otherwise>
+							AND create_date >= #{beginCreateDt}
+						</otherwise>
+					</choose>
+				</when>
+				<otherwise>
+					<if test="endCreateDt != null">
+						AND create_date &lt;=  #{endCreateDt}
+					</if>
+				</otherwise>
+			</choose>
+			AND process_flag BETWEEN 0 AND 3
+			<if test="processFlags != null">
+				AND process_flag in
+				<foreach collection="processFlags"  item="processFlag" open="(" close=")" separator=",">
+					#{processFlag.value}
+				</foreach>
+			</if>
+			<if test="userName != null and userName != ''">
+				AND CONCAT(name_first,name_last) LIKE CONCAT(#{userName}, '%')
+			</if>
+			<if test="userMobile != null and userMobile != ''">
+				AND telephone LIKE CONCAT(#{userMobile}, '%')
+			</if>
+		</where>
+		ORDER BY
+		create_date
+	</select>
+</mapper>

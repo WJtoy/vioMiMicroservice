@@ -1,0 +1,20 @@
+package com.kkl.kklplus.b2b.viomi.http.request;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 维修完工信息
+ */
+@Data
+public class RepairCompleteParam extends  InstallCompleteParam {
+    /**
+     * 服务措施
+     */
+    private String serviceMeasures;
+    /**
+     * 故障类型
+     */
+    private String faultType;
+}

@@ -1,0 +1,26 @@
+package com.kkl.kklplus.b2b.viomi.mapper;
+
+import com.github.pagehelper.Page;
+import com.kkl.kklplus.b2b.viomi.entity.VioMiApiLog;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BProcessLogSearchModel;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+/**
+ * @Auther wj
+ * @Date 2020/10/29 10:17
+ */
+@Mapper
+public interface VioMiApiLogMapper {
+
+    Long insert(VioMiApiLog vioMiApiLog);
+
+    void updateViomiFlag(VioMiApiLog vioMiApiLog);
+
+    List<VioMiApiLog> getList(Long b2bOrderId);
+
+
+}

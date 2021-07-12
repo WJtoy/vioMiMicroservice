@@ -1,0 +1,19 @@
+package com.kkl.kklplus.b2b.viomi.entity.request;
+
+import lombok.Data;
+
+/**
+ * @Auther wj
+ * @Date 2020/10/29 11:35
+ */
+
+@Data
+public class B2BViomiApiLogRequest {
+
+    private String kklOrderNo;
+
+    private String orderNumber;
+
+    private Long dateTime;
+
+}

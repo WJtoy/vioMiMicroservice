@@ -1,0 +1,60 @@
+package com.kkl.kklplus.b2b.viomi.http.command;
+
+import com.kkl.kklplus.b2b.viomi.http.request.ModeifyRepairOrderRequestParam;
+import com.kkl.kklplus.b2b.viomi.http.request.ModifyCreationOrderParam;
+import com.kkl.kklplus.b2b.viomi.http.request.RequestParam;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
+
+@ToString
+public class OperationCommand {
+
+    public enum OperationCode {
+
+        LIST_ORDER(1001, "分页查询工单", "getList", ModifyCreationOrderParam.class),
+        UPDATE_TRANSFER_RESULT(1002, "更新工单转换结果", "updateTransferResult", ModifyCreationOrderParam.class),
+        CHECK_ORDER_PROCESS_FLAG(1003, "检查工单是否可转换", "checkWorkcardProcessFlag", ModifyCreationOrderParam.class),
+        CANCEL_ORDER_TRANSITION(1004, "取消工单转换接口", "cancelOrderTransition", ModifyCreationOrderParam.class),
+        HANDLE_ORDER(1005, "工单处理", "handle", ModifyCreationOrderParam.class),
+        CANCEL_ORDER(1006, "工单撤销", "cancel", ModifyCreationOrderParam.class),
+        SEND_SMS(1007, "发送工单验证短信", "sendSms", ModifyCreationOrderParam.class),
+        REMARK_ORDER(1008, "工单备注", "remark", ModifyCreationOrderParam.class),
+        GRADE_SN(1009, "产品SN码验证", "gradeSn", ModifyCreationOrderParam.class),
+        PRODUCT_PARTS(1010, "获取产品配件", "getParts", ModifyCreationOrderParam.class),
+        FAULT_TYPE(1011, "获取故障类别", "getFaultType", ModifyCreationOrderParam.class),
+        CREATE_ORDER(1012, "第三方创建工单", "createOrder", ModifyCreationOrderParam.class),
+        OTHER_CANCEL_ORDER(1013, "第三方撤销工单", "cancelOrder", ModifyCreationOrderParam.class),
+        OTHER_REMARK_ORDER(1014, "第三方工单备注", "remarkOrder", ModifyCreationOrderParam.class),
+        REMINDER(1015, "第三方工单催单", "reminder", ModifyCreationOrderParam.class);
+
+
+
+        public int code;
+        public String name;
+        public String apiUrl;
+        public Class reqBodyClass;
+
+        private OperationCode(int code, String name, String apiUrl, Class reqBodyClass) {
+            this.code = code;
+            this.name = name;
+            this.apiUrl = apiUrl;
+            this.reqBodyClass = reqBodyClass;
+        }
+    }
+
+    @Getter
+    @Setter
+    private OperationCode opCode;
+
+    @Getter
+    @Setter
+    private RequestParam reqBody;
+
+    public static OperationCommand newInstance(OperationCode opCode, RequestParam reqBody) {
+        OperationCommand command = new OperationCommand();
+        command.opCode = opCode;
+        command.reqBody = reqBody;
+        return command;
+    }
+}

@@ -1,0 +1,69 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderNew;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiOrderExceptionSearchModel;
+import com.kkl.kklplus.b2b.viomi.service.OrderInfoService;
+import com.kkl.kklplus.b2b.viomi.service.SysLogService;
+import com.kkl.kklplus.b2b.viomi.service.ViomiApiLogService;
+import com.kkl.kklplus.b2b.viomi.utils.GsonUtils;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.common.MSPage;
+import com.kkl.kklplus.entity.viomi.sd.VioMiApiLog;
+import io.swagger.annotations.ApiOperation;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * @Auther wj
+ * @Date 2020/10/29 11:27
+ */
+
+@Slf4j
+@RestController
+@RequestMapping("/b2bLog")
+public class B2BViomiApiLogController {
+
+    @Autowired
+    private OrderInfoService orderInfoService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Autowired
+    private ViomiApiLogService viomiApiLogService;
+
+
+    @ApiOperation("工单异常列表")
+    @PostMapping("/getOrderInfoList")
+    public MSResponse<MSPage<VioMiOrderNew>> getOrderInfoList(@RequestBody VioMiOrderExceptionSearchModel vioMiOrderExceptionSearchModel) {
+        try {
+            MSPage<VioMiOrderNew> returnPage = orderInfoService.getOrderInfoList(vioMiOrderExceptionSearchModel);
+            return new MSResponse<>(MSErrorCode.SUCCESS, returnPage);
+        } catch (Exception e) {
+            log.error("查询工单异常:{}", e.getMessage());
+            sysLogService.insert(1L, GsonUtils.getInstance().toJson(vioMiOrderExceptionSearchModel), e.getMessage(),
+                    "查询工单异常", "b2bLog/getOrderInfoList", "POST");
+            return new MSResponse<>(new MSErrorCode(1000, StringUtils.left(e.getMessage(), 200)));
+        }
+    }
+
+    @ApiOperation("查询异常数据列表")
+    @PostMapping("/getOrderInfoList/{b2bOrderId}")
+    public MSResponse<List<VioMiApiLog>> getVioMiApiLogList(@PathVariable Long b2bOrderId) {
+        try {
+            List<VioMiApiLog> result = viomiApiLogService.getVioMiApiLogList(b2bOrderId);
+            return new MSResponse<>(MSErrorCode.SUCCESS, result);
+        } catch (Exception e) {
+            log.error("查询工单异常:{}", e.getMessage());
+            sysLogService.insert(1L, GsonUtils.getInstance().toJson(b2bOrderId), e.getMessage(),
+                    "查询工单异常", "b2bLog/getOrderInfoList", "POST");
+            return new MSResponse<>(new MSErrorCode(1000, StringUtils.left(e.getMessage(), 200)));
+        }
+    }
+
+}

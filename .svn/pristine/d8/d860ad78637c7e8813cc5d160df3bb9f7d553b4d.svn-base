@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMiOrderHandleMapper">
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="id">
+        insert into viomi_order_handle  (
+            b2b_order_id,
+            order_number,
+            status,
+            way,
+            node,
+            operator,
+            engineer_name,
+            engineer_phone,
+            time_of_appointment,
+            appointment_status,
+            location,
+            mi_sn,
+            kt_sn,
+            attachment,
+            service_measures,
+            parts,
+            is_fault,
+            fault_type,
+            worker_error_desc,
+            check_validate_result,
+            check_validate_detail,
+            pack_validate,
+            pack_validate_detail,
+            network_info,
+            praise_success,
+            praise_screenshot,
+            verify_code,
+            remote_fee,
+            detect_fee,
+            fine_fee,
+            mileage,
+            remarks,
+            process_flag,
+            process_time,
+            process_comment,
+            create_by,
+            create_date,
+            update_by,
+            update_date,
+            quarter
+        )
+        values (
+            #{b2bOrderId},
+            #{orderNumber},
+            #{status},
+            #{way},
+            #{node},
+            #{operator},
+            #{engineerName},
+            #{engineerPhone},
+            #{timeOfAppointment},
+            #{appointmentStatus},
+            #{location},
+            #{miSn},
+            #{ktSn},
+            #{attachment},
+            #{serviceMeasures},
+            #{parts},
+            #{isFault},
+            #{faultType},
+            #{workerErrorDesc},
+            #{checkValidateResult},
+            #{checkValidateDetail},
+            #{packValidate},
+            #{packValidateDetail},
+            #{networkInfo},
+            #{praiseSuccess},
+            #{praiseScreenshot},
+            #{verifyCode},
+            #{remoteFee},
+            #{detectFee},
+            #{fineFee},
+            #{mileage},
+            #{remarks},
+            #{processFlag},
+            #{processTime},
+            #{processComment},
+            #{createbyId},
+            #{createDate},
+            #{updateById},
+            #{updateDate},
+            #{quarter}
+        )
+    </insert>
+
+    <update id ="updateProcessFlag">
+        UPDATE viomi_order_handle
+        SET process_flag = #{processFlag},
+            process_time = #{processTime},
+            process_comment = #{processComment},
+            update_by = #{updateBy},
+            update_date = #{updateDate}
+         where id = #{id}
+    </update>
+
+
+
+</mapper>

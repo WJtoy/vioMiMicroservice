@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMiApiLogMapper" >
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_b2b_apilog(
+            b2b_order_id,
+            operating_status,
+			interface_name,
+			info_json,
+			result_json,
+			process_comment,
+			process_flag,
+			process_time,
+			create_by,
+			create_date,
+			update_by,
+			update_date,
+			quarter
+		) VALUES (
+		    #{b2bOrderId},
+		    #{operatingStatus},
+			#{interfaceName},
+			#{infoJson},
+			#{resultJson},
+			#{processComment},
+			#{processFlag},
+			#{processTime},
+			#{createBy},
+			#{createDt},
+			#{updateBy},
+			#{updateDt},
+			#{quarter}
+		)
+    </insert>
+
+    <update id="updateViomiFlag">
+        UPDATE
+        viomi_b2b_apilog
+        SET
+        process_flag    = #{processFlag},
+        update_by = #{updateBy},
+        update_date     = #{updateDt},
+        result_json = #{resultJson}
+        <if test="processComment != null and processComment != ''">
+            ,process_comment = #{processComment}
+        </if>
+        WHERE
+        id= #{id}
+    </update>
+
+
+	<select id="getList" resultType="com.kkl.kklplus.entity.viomi.sd.VioMiApiLog">
+		select
+			a.id,
+		  	a.b2b_order_id,
+            a.operating_status,
+			a.interface_name,
+			a.info_json,
+			a.result_json,
+			a.process_comment,
+			a.process_flag,
+			a.process_time,
+			a.create_by,
+			a.create_date as createDt,
+			a.update_by,
+			a.update_date as updateDt,
+			a.quarter,
+			b.first_exception_id
+		FROM  viomi_b2b_apilog as a
+		left join viomi_order as b on a.b2b_order_id = b.id
+			<where>
+				b2b_order_id = #{b2bOrderId}
+			</where>
+	</select>
+
+	<select id="findApiById" resultType="com.kkl.kklplus.b2b.viomi.entity.ViomiApiInfo">
+		select
+			id,
+		  	b2b_order_id,
+            operating_status,
+			interface_name,
+			info_json,
+			result_json,
+			process_flag
+		from viomi_b2b_apilog
+		where id = #{id}
+	</select>
+
+	<select id="getIdByOrderId" resultType="long">
+		select
+			id
+		from viomi_b2b_apilog
+		where b2b_order_id = #{b2bOrderId}
+			<![CDATA[and process_flag < 4 ]]>
+			and id > #{id}
+		order by id
+		limit 1
+	</select>
+
+</mapper>

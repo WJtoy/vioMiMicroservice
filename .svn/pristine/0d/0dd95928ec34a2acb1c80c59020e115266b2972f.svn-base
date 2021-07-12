@@ -1,0 +1,35 @@
+package com.kkl.kklplus.b2b.viomi.http.request;
+
+import lombok.Data;
+
+@Data
+public class ModeifyInstallOrderRequestParam extends RequestParam {
+
+    private String guid;
+    private String zzfld00001V;
+    private String zzfld00001M;
+    private String zzfld00003J;
+    private String zzfld00005Z;
+    private String zzfld00004M;
+    private String zzfld000060;
+    private String lines_TDLINE_ZICE;
+    private String zzfld00001R;
+    private String number_INT;
+    private String ordered_PROD;
+    private String description;
+    private String quantity;
+    private String lines_TDLINE_ZIC4;
+    private String zzfld00003K;
+    private String zzfld00002C;
+    private String url_PATH;
+    private String zzfld00002Y;
+    private String status_CODE;
+    private String user_STAT_PROC;
+    private String zzfld00006Y;
+    private String zzfld00006Z;
+    private String zzfld00003H;
+    private String region;
+    private String city_no;
+    private String city;
+
+}

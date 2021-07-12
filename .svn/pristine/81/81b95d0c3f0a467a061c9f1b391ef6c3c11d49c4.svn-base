@@ -1,0 +1,205 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.google.gson.Gson;
+import com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo;
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.config.B2BVioMIProperties;
+import com.kkl.kklplus.b2b.viomi.http.response.AgendaOrderResponseData;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.mq.sender.B2BWorkcardQtyDailyMQSend;
+import com.kkl.kklplus.b2b.viomi.service.B2BProcesslogService;
+import com.kkl.kklplus.b2b.viomi.service.SysLogService;
+import com.kkl.kklplus.b2b.viomi.service.VioMIOrderInfoService;
+import com.kkl.kklplus.b2b.viomi.utils.VioMIUtils;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2b.order.B2BWorkcardQtyDaily;
+import com.kkl.kklplus.entity.b2b.pb.MQB2BWorkcardQtyDailyMessage;
+import com.kkl.kklplus.entity.b2bcenter.md.B2BDataSourceEnum;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrder;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderSearchModel;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderTransferResult;
+import com.kkl.kklplus.entity.common.MSPage;
+import com.kkl.kklplus.utils.QuarterUtils;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.HttpUrl;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Slf4j
+@RestController
+@RequestMapping("/viomiOrderInfo")
+public class viomiOrderInfoController {
+
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @Autowired
+    private VioMIOrderInfoService viomiOrderInfoService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Autowired
+    private B2BWorkcardQtyDailyMQSend b2BWorkcardQtyDailyMQSend;
+
+    @Autowired
+    private B2BVioMIProperties tooneProperties;
+
+    @Autowired
+    private OkHttpUtils okHttpUtils;
+
+    //@Scheduled(cron = "0 */10 * * * ?")
+    public void viomiJob() {
+        B2BVioMIProperties.DataSourceConfig dataSourceConfig =
+                tooneProperties.getDataSourceConfig();
+        if (!dataSourceConfig.getScheduleEnabled()) {
+            return;
+        }
+        String url = dataSourceConfig.getRequestMainUrl().concat("/").concat(OperationCommand.OperationCode.TODOLIST.apiUrl);
+        HttpUrl.Builder urlBuilder =HttpUrl.parse(url).newBuilder();
+        urlBuilder.addQueryParameter("companyId", dataSourceConfig.getCompanyId());
+        urlBuilder.addQueryParameter("ivDealer2", dataSourceConfig.getIvDealer2());
+        urlBuilder.addQueryParameter("userId", dataSourceConfig.getUserId());
+        ResponseBody<AgendaOrderResponseData> responseBody =
+                okHttpUtils.getSyncGenericNew(urlBuilder.build(),AgendaOrderResponseData.class);
+        B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+        b2BProcesslog.preInsert();
+        b2BProcesslog.setInterfaceName(OperationCommand.OperationCode.TODOLIST.apiUrl);
+        b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_ACCEPT.value);
+        b2BProcesslog.setProcessTime(0);
+        b2BProcesslog.setCreateById(1L);
+        b2BProcesslog.setUpdateById(1L);
+        b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDate()));
+        b2BProcesslogService.insert(b2BProcesslog);
+        b2BProcesslog.setResultJson(responseBody.getOriginalJson());
+        if(responseBody != null && responseBody.getErrorCode() != null &&
+                responseBody.getErrorCode().equals(VioMIUtils.SUCCESS_CODE)){
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+            AgendaOrderResponseData agendaOrder = responseBody.getData();
+            if(agendaOrder != null && agendaOrder.getData() != null && agendaOrder.getData().size() > 0){
+                viomiOrderInfoService.addOrderInfo(agendaOrder.getData());
+            }
+        }else{
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(responseBody.getErrorMsg());
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+        }
+
+    }
+    @PostMapping("/getList")
+    public MSResponse<MSPage<B2BOrder>> getList(@RequestBody B2BOrderSearchModel workcardSearchModel) {
+        Gson gson = new Gson();
+        try {
+            MSPage<B2BOrder> returnPage = viomiOrderInfoService.getList(workcardSearchModel);
+            return new MSResponse<>(MSErrorCode.SUCCESS, returnPage);
+        } catch (Exception e) {
+            log.error("查询工单失败", e.getMessage());
+            sysLogService.insert(1L,gson.toJson(workcardSearchModel),
+                    "查询工单失败：" + e.getMessage(),
+                    "查询工单失败", VioMIUtils.ORDERLIST, VioMIUtils.REQUESTMETHOD);
+            return new MSResponse<>(new MSErrorCode(1000, StringUtils.left(e.getMessage(),200)));
+        }
+    }
+    /**
+     * 检查工单是否可以转换
+     * @param orderNos
+     * @return
+     */
+    @PostMapping("/checkWorkcardProcessFlag")
+    public MSResponse checkWorkcardProcessFlag(@RequestBody List<B2BOrderTransferResult> orderNos){
+        try {
+            if(orderNos == null){
+                return new MSResponse(new MSErrorCode(1000, "参数错误，工单编号不能为空"));
+            }
+            //查询出对应工单的状态
+            List<VioMIOrderInfo> orderInfos = viomiOrderInfoService.findOrdersProcessFlag(orderNos);
+            if(orderInfos == null){
+                return new MSResponse(MSErrorCode.FAILURE);
+            }
+            for (VioMIOrderInfo orderInfo : orderInfos) {
+                if (orderInfo.getProcessFlag() != null && orderInfo.getProcessFlag() == B2BProcessFlag.PROCESS_FLAG_SUCESS.value) {
+                    return new MSResponse(new MSErrorCode(1000, orderInfo.getGuid()+"工单已经转换成功,不能重复转换"));
+                }
+            }
+            return new MSResponse(MSErrorCode.SUCCESS);
+        }catch (Exception e){
+            log.error("检查工单失败", e.getMessage());
+            sysLogService.insert(1L,new Gson().toJson(orderNos),"检查工单失败：" + e.getMessage(),
+                    "检查工单失败",VioMIUtils.CHECKPROCESSFLAG, VioMIUtils.REQUESTMETHOD);
+            return new MSResponse(new MSErrorCode(1000, StringUtils.left(e.getMessage(),200)));
+        }
+    }
+
+    @PostMapping("/updateTransferResult")
+    public MSResponse updateTransferResult(@RequestBody List<B2BOrderTransferResult> workcardTransferResults) {
+        return new MSResponse(MSErrorCode.SUCCESS);
+        /*
+        try {
+            // 将List转化为Map 以b2bOrderNO为键
+            Map<String, List<B2BOrderTransferResult>> collect =
+                    workcardTransferResults.stream().collect(Collectors.groupingBy(B2BOrderTransferResult::getB2bOrderNo));
+            //查询出需要转换的工单
+            List<VioMIOrderInfo> orderInfos = viomiOrderInfoService.findOrdersProcessFlag(workcardTransferResults);
+            //用来存放各个数据源转换成功的数量
+            int count = 0;
+            //存放需要转换的工单集合
+            List<VioMIOrderInfo> wis = new ArrayList<>();
+            for (VioMIOrderInfo viomiOrderInfo : orderInfos) {
+                //如果工单为转换成功的才存放进工单集合
+                if (viomiOrderInfo.getProcessFlag() != B2BProcessFlag.PROCESS_FLAG_SUCESS.value) {
+                    List<B2BOrderTransferResult> transferResults = collect.get(viomiOrderInfo.getGuid());
+                    if (transferResults != null && transferResults.size() > 0) {
+                        B2BOrderTransferResult bOrderTransferResult = transferResults.get(0);
+                        //成功转换的才计算
+                        if (bOrderTransferResult.getProcessFlag() == B2BProcessFlag.PROCESS_FLAG_SUCESS.value) {
+                            count++;
+                        }
+                        viomiOrderInfo.setProcessFlag(bOrderTransferResult.getProcessFlag());
+                        viomiOrderInfo.setOrderId(bOrderTransferResult.getOrderId());
+                        viomiOrderInfo.setUpdateDt(bOrderTransferResult.getUpdateDt());
+                        viomiOrderInfo.setProcessComment(bOrderTransferResult.getProcessComment());
+                        wis.add(viomiOrderInfo);
+                    }
+                }
+            }
+            viomiOrderInfoService.updateTransferResult(wis);
+            //成功条数大于0才发送消息队列
+            MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage b2BWorkcardQtyDailyMessage =
+                    MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage.newBuilder()
+                            .setUniqueId(System.currentTimeMillis() + "")
+                            .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                            .setObtainMethod(B2BWorkcardQtyDaily.ObtainMethod.PUSH.value)
+                            .setStatisticType(B2BWorkcardQtyDaily.StatisticType.IN_KKLPLUSWEB.value)
+                            .setIncreasedQty(count)
+                            .setUpdateDate(System.currentTimeMillis())
+                            .setUpateById(B2BWorkcardQtyDaily.B2BWorkcardUpdateBy.VIOMI.id)
+                            .build();
+            b2BWorkcardQtyDailyMQSend.send(b2BWorkcardQtyDailyMessage);
+            return new MSResponse(MSErrorCode.SUCCESS);
+        } catch (Exception e) {
+            log.error("工单转换失败", e.getMessage());
+            sysLogService.insert(1L, new Gson().toJson(workcardTransferResults),
+                    "工单转换失败：" + e.getMessage(),
+                    "工单转换失败", VioMIUtils.UPDATETRANSFERRESULT, VioMIUtils.REQUESTMETHOD);
+            return new MSResponse(new MSErrorCode(1000, StringUtils.left(e.getMessage(),200)));
+
+        }*/
+    }
+
+    @GetMapping("/testJob")
+    public MSResponse testJob(){
+        viomiJob();
+        return new MSResponse(MSErrorCode.SUCCESS);
+    }
+}

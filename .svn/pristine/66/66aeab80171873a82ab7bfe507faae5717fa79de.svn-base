@@ -1,0 +1,135 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.entity.response.VioMiResponse;
+import com.kkl.kklplus.b2b.viomi.service.*;
+import com.kkl.kklplus.b2b.viomi.utils.QuarterUtils;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import io.swagger.annotations.ApiOperation;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import javax.servlet.http.HttpServletRequest;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
+/**
+ *第三方调用控制器
+ * @author chenxj
+ * @date 2020/09/18
+ */
+@Slf4j
+@RestController
+@RequestMapping("/b2b")
+public class B2BPushController {
+
+    @Autowired
+    private OrderInfoService orderInfoService;
+
+    @Autowired
+    private OrderRemarkService orderRemarkService;
+
+    @Autowired
+    private OrderCancelService orderCancelService;
+
+    @Autowired
+    private OrderReminderService orderReminderService;
+
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @ApiOperation("第三方派发工单")
+    @PostMapping("createOrder")
+    public VioMiResponse createOrder(HttpServletRequest req) throws IOException {
+        String json = getRequestJson(req);
+        try {
+            return orderInfoService.createOrder(json);
+        }catch (Exception e){
+            log.error("第三方派发工单:{}",json,e);
+            return new VioMiResponse(1,"处理异常");
+        }
+    }
+
+    @ApiOperation("第三方工单备注")
+    @PostMapping("remarkOrder")
+    public VioMiResponse remarkOrder(HttpServletRequest req) throws IOException {
+        String json = getRequestJson(req);
+        try {
+            return orderRemarkService.remarkOrder(json);
+        }catch (Exception e){
+            log.error("第三方工单备注:{}",json,e);
+            return new VioMiResponse(1,"处理异常");
+        }
+    }
+
+
+
+
+    @ApiOperation("第三方工单撤销")
+    @PostMapping("cancelOrder")
+    public VioMiResponse cancelOrder(HttpServletRequest req) throws IOException {
+        String json = getRequestJson(req);
+        try {
+            return orderCancelService.cancelOrder(json);
+        }catch (Exception e){
+            log.error("第三方工单撤销:{}",json,e);
+            return new VioMiResponse(1,"处理异常");
+        }
+    }
+
+    @ApiOperation("第三方工单催单")
+    @PostMapping("reminderOrder")
+    public VioMiResponse reminderOrder(HttpServletRequest req) throws IOException {
+        String json = getRequestJson(req);
+        try {
+            return orderReminderService.reminderOrder(json);
+        }catch (Exception e){
+            log.error("第三方工单催单:{}",json,e);
+            return new VioMiResponse(1,"处理异常");
+        }
+    }
+
+    @ApiOperation("第三方技术鉴定")
+    @PostMapping("handleOrder")
+    public VioMiResponse handleOrder(HttpServletRequest req) throws IOException {
+        String json = getRequestJson(req);
+        try {
+            B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+            b2BProcesslog.setInterfaceName("reminderOrder");
+            b2BProcesslog.setInfoJson(json);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_ACCEPT.value);
+            b2BProcesslog.setProcessTime(0);
+            b2BProcesslog.setCreateById(1L);
+            b2BProcesslog.setUpdateById(1L);
+            b2BProcesslog.preInsert();
+            b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDt()));
+            b2BProcesslogService.insert(b2BProcesslog);
+            return new VioMiResponse();
+        }catch (Exception e){
+            log.error("第三方技术鉴定:{}",json,e);
+            return new VioMiResponse(1,"处理异常");
+        }
+    }
+
+
+    private String getRequestJson(HttpServletRequest req) throws IOException {
+        // 读取参数
+        InputStream inputStream;
+        StringBuffer sb = new StringBuffer();
+        inputStream = req.getInputStream();
+        String s;
+        BufferedReader in = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
+        while ((s = in.readLine()) != null) {
+            sb.append(s);
+        }
+        in.close();
+        inputStream.close();
+        String json = sb.toString();
+        return json;
+    }
+}

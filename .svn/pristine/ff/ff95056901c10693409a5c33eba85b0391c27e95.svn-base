@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMIUpdateOrderMapper" >
+
+	<insert id="insert" useGeneratedKeys="true" keyProperty="id">
+		insert into viomi_update_order(
+			guid,
+			appointment_date,
+			appointment_time,
+			buy_type,
+			to_reason_about,
+			is_appointment,
+			canel_reason,
+			follow_up_content,
+			bar_code,
+			number_int,
+			ordered_prod,
+			description,
+			quantity,
+			dispose_result,
+			warranty_type,
+			service_measures,
+			service_mode,
+			service_finish_date,
+			service_finish_time,
+			url_path,
+			failur_phen,
+			failur_reason,
+			service_province,
+			service_city,
+			buyer_date,
+			status,
+			user_stat_proc,
+			region,
+			city_no,
+			city,
+			process_flag,
+			process_time,
+			create_by,
+			create_date,
+			update_by,
+			update_date,
+			quarter
+		)VALUES (
+			#{guid},
+			#{appointmentDate},
+			#{appointmentTime},
+			#{buyType},
+			#{toReasonAbout},
+			#{isAppointment},
+			#{canelReason},
+			#{followUpContent},
+			#{barCode},
+			#{numberInt},
+			#{orderedProd},
+			#{description},
+			#{quantity},
+			#{disposeResult},
+			#{warrantyType},
+			#{serviceMeasures},
+			#{serviceMode},
+			#{serviceFinishDate},
+			#{serviceFinishTime},
+			#{urlPath},
+			#{failurPhen},
+			#{failurReason},
+			#{serviceProvince},
+			#{serviceCity},
+			#{buyerDate},
+			#{status},
+			#{userStatProc},
+			#{region},
+			#{cityNo},
+			#{city},
+			#{processFlag},
+			#{processTime},
+			#{createById},
+			#{createDt},
+			#{updateById},
+			#{updateDt},
+			#{quarter}
+		)
+	</insert>
+	<update id="updateProcessFlag">
+		UPDATE
+		viomi_update_order
+		SET
+		process_flag = #{processFlag},
+		update_date = #{updateDt},
+		process_time =  process_time+1
+		<if test="processComment != null and processComment != ''">
+			,process_comment = #{processComment}
+		</if>
+		WHERE
+		id = #{id}
+	</update>
+	<select id="findAppointmentCount" resultType="java.lang.Integer">
+		SELECT
+			count(0)
+		FROM
+			viomi_update_order
+		WHERE
+			guid = #{guid}
+			AND process_flag = 4
+			AND status = 3
+	</select>
+</mapper>

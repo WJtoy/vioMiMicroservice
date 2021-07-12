@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.OrderInfoMapper" >
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_order(
+        	order_number,
+			operator,
+			remarks,
+			sub_type,
+			contacts,
+			contacts_phone,
+			address,
+			address_detail,
+			source,
+			payment_object,
+			expected_service_time,
+			type,
+			complain_order_number,
+			complain_network_number,
+			uniqueid,
+			kt_product,
+			create_by,
+			create_date,
+			quarter,
+			product_name,
+			product_model,
+			product_type,
+			product_big_type,
+			product_69_code,
+			mi_sn,
+			mi_purchase_channel,
+			mi_order_number,
+			mi_purchase_Time,
+			inner_guarantee
+		) VALUES (
+			#{orderNumber},
+			#{operator},
+			#{remarks},
+			#{subType},
+			#{contacts},
+			#{contactsPhone},
+			#{address},
+			#{addressDetail},
+			#{source},
+			#{paymentObject},
+			#{expectedServiceTime},
+			#{type},
+			#{complainOrderNumber},
+			#{complainNetworkNumber},
+			#{uniqueid},
+			#{ktProductJson},
+			#{createById},
+			#{createDt},
+			#{quarter},
+			#{productName},
+			#{productModel},
+			#{productType},
+			#{productBigType},
+			#{product_69Code},
+		    #{miSn},
+		  	#{miPurchaseChannel},
+			#{miOrderNumber},
+			#{miPurchaseTime},
+			#{innerGuarantee}
+		)
+    </insert>
+	<update id="updateTransferResult">
+		UPDATE
+			viomi_order
+		SET
+		process_flag = #{processFlag},
+		process_time = process_time + 1,
+		<if test="kklOrderId != null">
+			kkl_order_id = #{kklOrderId},
+		</if>
+		<if test="kklOrderNo != null">
+			kkl_order_no = #{kklOrderNo},
+		</if>
+		<if test="processFlag != 4">
+			process_comment = #{processComment},
+		</if>
+			update_date = #{updateDt},
+			update_by = #{updateById}
+		WHERE
+		id = #{id}
+	</update>
+	<select id="getIdByOrderNumber" resultType="java.lang.Long">
+        SELECT
+            id
+        FROM
+            viomi_order
+        WHERE
+            order_number = #{orderNumber}
+        LIMIT 1
+    </select>
+	<select id="getList" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+			id,
+			order_number,
+			operator,
+			remarks,
+			sub_type,
+			contacts,
+			contacts_phone,
+			address,
+			address_detail,
+			source,
+			payment_object,
+			expected_service_time,
+			type,
+			complain_order_number,
+			complain_network_number,
+			uniqueid,
+			kt_product,
+			create_by,
+			create_date,
+			quarter,
+			product_name,
+			product_model,
+			product_type,
+			product_big_type,
+			product_69_code,
+			mi_sn,
+			mi_purchase_channel,
+			mi_order_number,
+			mi_purchase_Time,
+			inner_guarantee,
+			process_flag,
+			process_time,
+			process_comment
+		FROM
+			viomi_order
+		<where>
+			AND process_flag BETWEEN 0 AND 3
+			<if test="processFlags != null">
+				AND process_flag in
+				<foreach collection="processFlags"  item="processFlag" open="(" close=")" separator=",">
+					#{processFlag.value}
+				</foreach>
+			</if>
+			<if test="userName != null and userName != ''">
+				AND contacts LIKE CONCAT(#{userName}, '%')
+			</if>
+			<if test="userMobile != null and userMobile != ''">
+				AND contacts_phone LIKE CONCAT(#{userMobile}, '%')
+			</if>
+			<if test="parentBizOrderId != null and parentBizOrderId != ''">
+				AND order_number LIKE CONCAT(#{parentBizOrderId}, '%')
+			</if>
+			<if test="userAddress != null and userAddress != ''">
+				AND CONCAT(address,address_details) LIKE CONCAT('%', #{userAddress}, '%')
+			</if>
+			<choose>
+				<when test="beginCreateDt != null ">
+					<choose>
+						<when test="endCreateDt != null">
+							AND create_date between #{beginCreateDt} and #{endCreateDt}
+						</when>
+						<otherwise>
+							AND create_date >= #{beginCreateDt}
+						</otherwise>
+					</choose>
+				</when>
+				<otherwise>
+					<if test="endCreateDt != null">
+						AND create_date &lt;=  #{endCreateDt}
+					</if>
+				</otherwise>
+			</choose>
+		</where>
+		ORDER BY id
+	</select>
+	<select id="findOrdersProcessFlag" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo">
+		SELECT
+			id,
+			order_number,
+			process_flag
+		FROM
+			viomi_order
+		<where>
+			<if test="results != null and results.size > 0">
+				id in
+				<foreach collection="results" item="result" open="(" close=")" separator=",">
+					#{result.b2bOrderId}
+				</foreach>
+			</if>
+		</where>
+		<if test="results == null or results.size == 0">
+			limit 0
+		</if>
+	</select>
+
+</mapper>

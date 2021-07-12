@@ -1,0 +1,12 @@
+package com.kkl.kklplus.b2b.viomi.http.response;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo;
+import lombok.Data;
+
+import java.util.List;
+
+@Data
+public class OrderInfoResponseData extends ResponseData{
+
+    private List<VioMIOrderInfo> data;
+}

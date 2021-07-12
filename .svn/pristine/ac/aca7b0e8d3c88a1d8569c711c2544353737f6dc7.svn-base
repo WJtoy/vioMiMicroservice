@@ -1,0 +1,505 @@
+package com.kkl.kklplus.b2b.viomi.service;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderHandle;
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo;
+import com.kkl.kklplus.b2b.viomi.entity.VioMiWay;
+import com.kkl.kklplus.b2b.viomi.http.request.*;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiHandleRequest;
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.mapper.VioMiOrderHandleMapper;
+import com.kkl.kklplus.b2b.viomi.utils.GsonUtils;
+import com.kkl.kklplus.b2b.viomi.utils.QuarterUtils;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+@Service
+@Slf4j
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public class VioMiOrderHandleService {
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Resource
+    private VioMiOrderHandleMapper vioMiOrderHandleMapper;
+
+    @Autowired
+    private OrderInfoService orderInfoService;
+
+    /**
+     * 派单/转派
+     * @param vioMiOrderHandle
+     */
+    @Transactional
+    public MSResponse planing(VioMiOrderHandle vioMiOrderHandle) {
+        MSResponse msResponse;
+        VioMiOrderInfo vioMiOrderInfo = orderInfoService.getOrderStatusByOrderId(vioMiOrderHandle.getB2bOrderId());
+        boolean needPlaning = false;
+        String  way = "";
+        String  node = "";
+        if (StringUtils.isBlank(vioMiOrderInfo.getViomiStatus()) && StringUtils.isBlank(vioMiOrderInfo.getViomiSubStatus())) {
+            //上一次 way为空，node为空:为新工单
+            needPlaning = true;
+            way = VioMiWay.STATUS_PLANING;
+            node = VioMiWay.STATUS_PLANING;
+        } else if (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_PLANING) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_PLANING)) {
+            //上一次 way：派送师傅，node：派送师傅
+            needPlaning = true;
+            way = VioMiWay.STATUS_APPOINTMENT;
+            node = VioMiWay.STATUS_RE_PLANING;
+        } else if (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_APPOINTMENT) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_APPOINTMENT_SUCCESS)) {
+            //上一次 way：预约上门，node: 预约成功
+            needPlaning = true;
+            way = VioMiWay.STATUS_CLOCK_IN_HOME;
+            node = VioMiWay.STATUS_RE_PLANING;
+        } else if (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_CLOCK_IN_HOME) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_CLOCK_IN_SUCCESS)) {
+            //上一次 way：上门打卡，node: 打卡成功
+            needPlaning = true;
+            if (vioMiOrderInfo.getType().equals("安装")) {
+                way = VioMiWay.STATUS_INSTALL_COMPLETE;
+            } else if (vioMiOrderInfo.getType().equals("维修")) {
+                way = VioMiWay.STATUS_REPAIR_COMPLETE;
+            }
+            node = VioMiWay.STATUS_RE_PLANING;
+        }
+        vioMiOrderHandle.setWay(way);
+        vioMiOrderHandle.setNode(node);
+
+        // 添加一个工单处理数据
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            if (!needPlaning) {
+                return new MSResponse(MSErrorCode.FAILURE);
+            }
+            OrderHandleRequestParam<EngineerParam> orderHandleRequestParam = new OrderHandleRequestParam<>();
+            orderHandleRequestParam.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            HandleParam handleParam = new HandleParam();
+            handleParam.setWay(vioMiOrderHandle.getWay());
+            handleParam.setNode(vioMiOrderHandle.getNode());
+            handleParam.setOperator(vioMiOrderHandle.getOperator());
+            handleParam.setRemarks(vioMiOrderHandle.getRemarks());
+            orderHandleRequestParam.setHandle(handleParam);
+
+            // 师傅数据
+            EngineerParam engineerParam = new EngineerParam();
+            engineerParam.setEngineerName(vioMiOrderHandle.getEngineerName());
+            engineerParam.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+            orderHandleRequestParam.setData(engineerParam);
+
+            msResponse = pushMessageToVioMi(orderHandleRequestParam, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo updateVioMiOrderInfo = new VioMiOrderInfo();
+                updateVioMiOrderInfo.setB2bOrderId(vioMiOrderHandle.getB2bOrderId());
+                updateVioMiOrderInfo.setOrderStatus(vioMiOrderHandle.getStatus());
+                updateVioMiOrderInfo.setViomiStatus(way);
+                updateVioMiOrderInfo.setViomiSubStatus(node);
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(updateVioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+    /**
+     * 预约上门
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @Transactional
+    public MSResponse appointment(VioMiOrderHandle vioMiOrderHandle) {
+        // 判断当前状态是否应当为预约上门
+        MSResponse msResponse;
+        VioMiOrderInfo vioMiOrderInfo = orderInfoService.getOrderStatusByOrderId(vioMiOrderHandle.getB2bOrderId());
+        boolean needAppointment = false;
+        String  way = "";
+        String  node = "";
+        if ((vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_PLANING) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_PLANING))   //上一次 way：派送师傅，node：派送师傅
+               || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_APPOINTMENT) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_APPOINTMENT_FAILURE)) // //上一次 way：预约上门，node: 预约失败
+               || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_APPOINTMENT) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_PLANING)) //上一次 way：预约上门，node: 转派师傅
+               || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_CLOCK_IN_HOME) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_PLANING)) //上一次 way：上门打卡，node: 转派师傅
+               || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_PROCESS_COMPLETE) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_PLANING)) //上一次 way：处理完成，node: 转派师傅
+            ) {
+            needAppointment = true;
+        }
+
+        if (needAppointment) {
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  预约成功
+                way = VioMiWay.STATUS_APPOINTMENT;
+                node = VioMiWay.STATUS_APPOINTMENT_SUCCESS;
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 转派师傅
+                way = VioMiWay.STATUS_APPOINTMENT;
+                node = VioMiWay.STATUS_RE_PLANING;
+            }
+            // 预约失败，暂停工单 这两项功能暂不考虑
+        }
+        vioMiOrderHandle.setWay(way);
+        vioMiOrderHandle.setNode(node);
+
+        // 添加一个工单处理数据
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            if (!needAppointment) {
+                return new MSResponse(MSErrorCode.FAILURE);
+            }
+
+            OrderHandleRequestParam orderHandleRequestParam = null;
+
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  预约成功
+                orderHandleRequestParam = new OrderHandleRequestParam<AppointmentParam>();
+                AppointmentParam appointmentParam = new AppointmentParam();
+                String strDateFormat = "yyyy-MM-dd HH:mm:ss";
+                SimpleDateFormat simpleDateFormat = new SimpleDateFormat(strDateFormat);
+                String strTimeOfAppointment = simpleDateFormat.format(new Date(vioMiOrderHandle.getTimeOfAppointment()));
+                log.warn("预约时间:{}", strTimeOfAppointment);
+                appointmentParam.setTimeOfAppointment(strTimeOfAppointment);
+
+                orderHandleRequestParam.setData(appointmentParam);
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 转派师傅
+                orderHandleRequestParam = new OrderHandleRequestParam<EngineerParam>();
+                EngineerParam engineerParam = new EngineerParam();
+                engineerParam.setEngineerName(vioMiOrderHandle.getEngineerName());
+                engineerParam.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+                orderHandleRequestParam.setData(engineerParam);
+            }
+            orderHandleRequestParam.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            HandleParam handleParam = new HandleParam();
+            handleParam.setWay(vioMiOrderHandle.getWay());
+            handleParam.setNode(vioMiOrderHandle.getNode());
+            handleParam.setOperator(vioMiOrderHandle.getOperator());
+            handleParam.setRemarks(vioMiOrderHandle.getRemarks());
+            orderHandleRequestParam.setHandle(handleParam);
+
+            msResponse = pushMessageToVioMi(orderHandleRequestParam, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo updateVioMiOrderInfo = new VioMiOrderInfo();
+                updateVioMiOrderInfo.setB2bOrderId(vioMiOrderHandle.getB2bOrderId());
+                updateVioMiOrderInfo.setOrderStatus(vioMiOrderHandle.getStatus());
+                updateVioMiOrderInfo.setViomiStatus(way);
+                updateVioMiOrderInfo.setViomiSubStatus(node);
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(updateVioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+    /**
+     * 上门打卡
+     * @param vioMiOrderHandle
+     * @return
+     */
+    public MSResponse clockInHome(VioMiOrderHandle vioMiOrderHandle) {
+        // 判断当前状态是否应当为上门打卡
+        MSResponse msResponse;
+        VioMiOrderInfo vioMiOrderInfo = orderInfoService.getOrderStatusByOrderId(vioMiOrderHandle.getB2bOrderId());
+        boolean needClockInHome = false;
+        String  way = "";
+        String  node = "";
+        if ((vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_APPOINTMENT) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_APPOINTMENT_SUCCESS))   //上一次 way：预约上门，node：预约成功
+                || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_CLOCK_IN_HOME) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_APPOINTMENT)) // //上一次 way：上门打卡，node: 重新预约
+                || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_PROCESS_COMPLETE) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_APPOINTMENT)) //上一次 way：处理完成，node: 重新预约
+        ) {
+            needClockInHome = true;
+        }
+
+        if (needClockInHome) {
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  上门打卡,重新预约
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_RE_APPOINTMENT;
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 上门打卡,转派师傅
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_RE_PLANING;
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getLocation())) {
+                // 上门打卡,打卡成功
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_CLOCK_IN_SUCCESS;
+            }
+        }
+        vioMiOrderHandle.setWay(way);
+        vioMiOrderHandle.setNode(node);
+
+        // 添加一个工单处理数据
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            if (!needClockInHome) {
+                return new MSResponse(MSErrorCode.FAILURE);
+            }
+
+            OrderHandleRequestParam orderHandleRequestParam = null;
+
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  重新预约
+                orderHandleRequestParam = new OrderHandleRequestParam<AppointmentParam>();
+                AppointmentParam appointmentParam = new AppointmentParam();
+                String strDateFormat = "yyyy-MM-dd HH:mm:ss";
+                SimpleDateFormat simpleDateFormat = new SimpleDateFormat(strDateFormat);
+                String strTimeOfAppointment = simpleDateFormat.format(new Date(vioMiOrderHandle.getTimeOfAppointment()));
+                log.warn("预约时间:{}", strTimeOfAppointment);
+                appointmentParam.setTimeOfAppointment(strTimeOfAppointment);
+
+                orderHandleRequestParam.setData(appointmentParam);
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 转派师傅
+                orderHandleRequestParam = new OrderHandleRequestParam<EngineerParam>();
+                EngineerParam engineerParam = new EngineerParam();
+                engineerParam.setEngineerName(vioMiOrderHandle.getEngineerName());
+                engineerParam.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+                orderHandleRequestParam.setData(engineerParam);
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getLocation())) {
+                // 打卡成功
+                orderHandleRequestParam = new OrderHandleRequestParam<LocationParam>();
+                LocationParam locationParam = new LocationParam();
+                locationParam.setLocation(vioMiOrderHandle.getLocation());
+                orderHandleRequestParam.setData(locationParam);
+            }
+            orderHandleRequestParam.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            HandleParam handleParam = new HandleParam();
+            handleParam.setWay(vioMiOrderHandle.getWay());
+            handleParam.setNode(vioMiOrderHandle.getNode());
+            handleParam.setOperator(vioMiOrderHandle.getOperator());
+            handleParam.setRemarks(vioMiOrderHandle.getRemarks());
+            orderHandleRequestParam.setHandle(handleParam);
+
+            msResponse = pushMessageToVioMi(orderHandleRequestParam, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo updateVioMiOrderInfo = new VioMiOrderInfo();
+                updateVioMiOrderInfo.setB2bOrderId(vioMiOrderHandle.getB2bOrderId());
+                updateVioMiOrderInfo.setOrderStatus(vioMiOrderHandle.getStatus());
+                updateVioMiOrderInfo.setViomiStatus(way);
+                updateVioMiOrderInfo.setViomiSubStatus(node);
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(updateVioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+    @Transactional
+    public MSResponse processComplete(VioMiOrderHandle vioMiOrderHandle) {
+        MSResponse msResponse;
+        VioMiOrderInfo vioMiOrderInfo = orderInfoService.getOrderStatusByOrderId(vioMiOrderHandle.getB2bOrderId());
+        boolean needClockInHome = false;
+        String  way = "";
+        String  node = "";
+        if ((vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_APPOINTMENT) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_APPOINTMENT_SUCCESS))   //上一次 way：预约上门，node：预约成功
+                || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_CLOCK_IN_HOME) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_APPOINTMENT)) // //上一次 way：上门打卡，node: 重新预约
+                || (vioMiOrderInfo.getViomiStatus().equals(VioMiWay.STATUS_PROCESS_COMPLETE) && vioMiOrderInfo.getViomiSubStatus().equals(VioMiWay.STATUS_RE_APPOINTMENT)) //上一次 way：处理完成，node: 重新预约
+        ) {
+            needClockInHome = true;
+        }
+
+        if (needClockInHome) {
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  上门打卡,重新预约
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_RE_APPOINTMENT;
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 上门打卡,转派师傅
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_RE_PLANING;
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getLocation())) {
+                // 上门打卡,打卡成功
+                way = VioMiWay.STATUS_CLOCK_IN_HOME;
+                node = VioMiWay.STATUS_CLOCK_IN_SUCCESS;
+            }
+        }
+        vioMiOrderHandle.setWay(way);
+        vioMiOrderHandle.setNode(node);
+
+        // 添加一个工单处理数据
+        int effectRowCount = vioMiOrderHandleMapper.insert(vioMiOrderHandle);
+        if (effectRowCount >= 1) {
+            if (!needClockInHome) {
+                return new MSResponse(MSErrorCode.FAILURE);
+            }
+
+            OrderHandleRequestParam orderHandleRequestParam = null;
+
+            if (vioMiOrderHandle.getTimeOfAppointment() != null) {
+                //  重新预约
+                orderHandleRequestParam = new OrderHandleRequestParam<AppointmentParam>();
+                AppointmentParam appointmentParam = new AppointmentParam();
+                String strDateFormat = "yyyy-MM-dd HH:mm:ss";
+                SimpleDateFormat simpleDateFormat = new SimpleDateFormat(strDateFormat);
+                String strTimeOfAppointment = simpleDateFormat.format(new Date(vioMiOrderHandle.getTimeOfAppointment()));
+                log.warn("预约时间:{}", strTimeOfAppointment);
+                appointmentParam.setTimeOfAppointment(strTimeOfAppointment);
+
+                orderHandleRequestParam.setData(appointmentParam);
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getEngineerName()) && StringUtils.isNotBlank(vioMiOrderHandle.getEngineerPhone())) {
+                // 转派师傅
+                orderHandleRequestParam = new OrderHandleRequestParam<EngineerParam>();
+                EngineerParam engineerParam = new EngineerParam();
+                engineerParam.setEngineerName(vioMiOrderHandle.getEngineerName());
+                engineerParam.setEngineerPhone(vioMiOrderHandle.getEngineerPhone());
+                orderHandleRequestParam.setData(engineerParam);
+            } else if (StringUtils.isNotBlank(vioMiOrderHandle.getLocation())) {
+                // 打卡成功
+                orderHandleRequestParam = new OrderHandleRequestParam<LocationParam>();
+                LocationParam locationParam = new LocationParam();
+                locationParam.setLocation(vioMiOrderHandle.getLocation());
+                orderHandleRequestParam.setData(locationParam);
+            }
+            orderHandleRequestParam.setOrderNumber(vioMiOrderHandle.getOrderNumber());
+
+            // handle
+            HandleParam handleParam = new HandleParam();
+            handleParam.setWay(vioMiOrderHandle.getWay());
+            handleParam.setNode(vioMiOrderHandle.getNode());
+            handleParam.setOperator(vioMiOrderHandle.getOperator());
+            handleParam.setRemarks(vioMiOrderHandle.getRemarks());
+            orderHandleRequestParam.setHandle(handleParam);
+
+            msResponse = pushMessageToVioMi(orderHandleRequestParam, vioMiOrderHandle.getCreateById(), vioMiOrderHandle.getUpdateById(), vioMiOrderHandle.getId());
+            if (msResponse.getCode() == 0) {
+                // 更新订单状态
+                VioMiOrderInfo updateVioMiOrderInfo = new VioMiOrderInfo();
+                updateVioMiOrderInfo.setB2bOrderId(vioMiOrderHandle.getB2bOrderId());
+                updateVioMiOrderInfo.setOrderStatus(vioMiOrderHandle.getStatus());
+                updateVioMiOrderInfo.setViomiStatus(way);
+                updateVioMiOrderInfo.setViomiSubStatus(node);
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateById());
+                updateVioMiOrderInfo.setUpdateDt(vioMiOrderHandle.getUpdateDt());
+                orderInfoService.updateOrderStatus(updateVioMiOrderInfo);
+            }
+            return msResponse;
+        } else {
+            msResponse = new MSResponse(MSErrorCode.FAILURE);
+            return msResponse;
+        }
+    }
+
+
+
+    /**
+     * 推送工单办理消息给云米
+     * @param orderHandleRequestParam
+     * @param createById
+     * @param updateById
+     * @param orderHandleId
+     * @return
+     */
+    public MSResponse pushMessageToVioMi(OrderHandleRequestParam orderHandleRequestParam, Long createById, Long updateById, Long orderHandleId) {
+        // 获取工单状态
+        String strDataType = orderHandleRequestParam.getHandle().getWay();
+        String strOrderNumber = orderHandleRequestParam.getOrderNumber();
+
+        MSResponse msResponse = new MSResponse();
+        msResponse.setErrorCode(MSErrorCode.SUCCESS);
+
+        // 生成发送Log
+        B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+        b2BProcesslog.setDataType(strDataType);
+        b2BProcesslog.setInterfaceName(OperationCommand.OperationCode.ORDER_HANDLE.apiUrl);
+        b2BProcesslog.setProcessTime(0);
+        b2BProcesslog.setCreateById(createById);
+        b2BProcesslog.setUpdateById(updateById);
+        b2BProcesslog.preInsert();
+        b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDt()));
+
+        // 更新OrderHandle
+        VioMiOrderHandle vioMiOrderHandle = new VioMiOrderHandle();
+        vioMiOrderHandle.setId(orderHandleId);
+        vioMiOrderHandle.setUpdateById(updateById);
+        vioMiOrderHandle.preUpdate();
+        vioMiOrderHandle.setQuarter(QuarterUtils.getQuarter(vioMiOrderHandle.getUpdateDate()));
+        vioMiOrderHandle.setProcessTime(0);
+
+        // 生成要发送的json对象
+        String infoJson = GsonUtils.getInstance().toJson(orderHandleRequestParam);
+        b2BProcesslog.setInfoJson(infoJson);
+        try {
+            b2BProcesslogService.insert(b2BProcesslog);
+            OperationCommand command = OperationCommand.newInstance(OperationCommand.OperationCode.ORDER_HANDLE, orderHandleRequestParam);
+            ResponseBody<ResponseBody> resBody = OkHttpUtils.postSyncGenericNew(command, ResponseBody.class);
+            b2BProcesslog.setResultJson(resBody.getOriginalJson());
+            ResponseBody data = resBody.getData();
+            if( resBody.getErrorCode() == ResponseBody.ErrorCode.SUCCESS.code && data != null){
+                if (data.getErrorCode().equals(0)) { // 0 -- 成功
+                    b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+
+                    vioMiOrderHandle.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    vioMiOrderHandle.setProcessComment(data.getErrorMsg());
+                    vioMiOrderHandleMapper.updateProcessFlag(vioMiOrderHandle);
+
+                    msResponse.setMsg(data.getErrorMsg());
+                    return msResponse;
+                }
+            }
+            // 1：签名无效 2：参数有误3：流程错误 4：办理方式错误 5：办理参数有误 6：验收码错误 7：SN码有误
+            String errorStr = data != null ? data.getErrorMsg() : resBody.getErrorMsg();
+            Integer errorCode = data != null ? data.getErrorCode() : resBody.getErrorCode();
+            errorStr = StringUtils.left(errorStr,255);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(errorStr);
+            msResponse.setThirdPartyErrorCode(new MSErrorCode(errorCode,errorStr));
+            //errorCode大于等于90000300，设置错误编码，便于调用方重试
+            if(errorCode >= ResponseBody.ErrorCode.REQUEST_INVOCATION_FAILURE.code){
+                msResponse.setCode(errorCode);
+                msResponse.setMsg(errorStr);
+            }
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+
+            vioMiOrderHandle.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            vioMiOrderHandle.setProcessComment(errorStr);
+            vioMiOrderHandleMapper.updateProcessFlag(vioMiOrderHandle);
+
+            return msResponse;
+        }catch (Exception e) {
+            String errorMsg = StringUtils.left(e.getMessage(), 255);
+            msResponse.setErrorCode(MSErrorCode.FAILURE);
+            msResponse.setMsg(errorMsg);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(errorMsg);
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+            log.error("errorStr:{}", e.getMessage());
+            sysLogService.insert(1L, infoJson, e.getMessage(), "调用云米工单处理接口失败", String.format("orderNumber:%s,handleWay:%s",strOrderNumber,strDataType), "POST");
+            return msResponse;
+        }
+    }
+
+}

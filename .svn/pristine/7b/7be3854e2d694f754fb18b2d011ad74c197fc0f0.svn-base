@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.OrderReminderMapperMapper" >
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        INSERT INTO viomi_order_reminder(
+        	b2b_order_id,
+        	kkl_order_id,
+        	order_number,
+			operator,
+			remarks,
+			create_by,
+			create_date,
+			quarter
+		) VALUES (
+			#{b2bOrderId},
+			#{kklOrderId},
+			#{orderNumber},
+			#{operator},
+			#{remarks},
+			#{createById},
+			#{createDt},
+			#{quarter}
+		)
+    </insert>
+</mapper>

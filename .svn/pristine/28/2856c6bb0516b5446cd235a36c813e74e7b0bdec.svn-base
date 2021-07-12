@@ -1,0 +1,6 @@
+package com.kkl.kklplus.b2b.viomi.utils;
+
+public class VioMiUtils {
+    public static final int SUCCESS_CODE = 0;
+    public static final int FAILURE_CODE = 1;
+}

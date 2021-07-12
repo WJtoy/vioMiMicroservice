@@ -1,0 +1,268 @@
+package com.kkl.kklplus.b2b.viomi.service;
+
+
+import com.github.pagehelper.Page;
+import com.github.pagehelper.PageHelper;
+import com.google.gson.Gson;
+import com.kkl.kklplus.b2b.viomi.entity.SysLog;
+import com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo;
+import com.kkl.kklplus.b2b.viomi.http.response.AgendaOrderResponseData;
+import com.kkl.kklplus.b2b.viomi.http.response.OrderInfoResponseData;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.mapper.B2BProcesslogMapper;
+import com.kkl.kklplus.b2b.viomi.mapper.SysLogMapper;
+import com.kkl.kklplus.b2b.viomi.mapper.VioMIOrderInfoMapper;
+import com.kkl.kklplus.b2b.viomi.mq.sender.B2BOrderMQSender;
+import com.kkl.kklplus.b2b.viomi.mq.sender.B2BWorkcardQtyDailyMQSend;
+import com.kkl.kklplus.b2b.viomi.utils.QuarterUtils;
+import com.kkl.kklplus.b2b.viomi.utils.VioMIUtils;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2b.order.B2BWorkcardQtyDaily;
+import com.kkl.kklplus.entity.b2b.pb.MQB2BWorkcardQtyDailyMessage;
+import com.kkl.kklplus.entity.b2bcenter.md.B2BDataSourceEnum;
+import com.kkl.kklplus.entity.b2bcenter.md.B2BShopEnum;
+import com.kkl.kklplus.entity.b2bcenter.pb.MQB2BOrderMessage;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrder;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderSearchModel;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderTransferResult;
+import com.kkl.kklplus.entity.common.MSPage;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.util.List;
+
+@Service
+@Slf4j
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public class VioMIOrderInfoService {
+
+    @Autowired
+    private B2BWorkcardQtyDailyMQSend b2BWorkcardQtyDailyMQSend;
+
+    @Autowired
+    private B2BOrderMQSender b2BOrderMQSender;
+
+    @Resource
+    private VioMIOrderInfoMapper orderInfoMapper;
+
+    @Resource
+    private SysLogMapper sysLogMapper;
+
+    @Resource
+    private B2BProcesslogMapper b2BProcesslogMapper;
+
+    /**
+     * 添加华帝的工单信息
+     * @param agendaOrders
+     */
+    public void addOrderInfo(List<AgendaOrderResponseData.AgendaOrder> agendaOrders) {
+        /*
+        MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage b2BWorkcardQtyDailyMessage=
+                MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage.newBuilder()
+                        .setUniqueId(System.currentTimeMillis()+"")
+                        .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                        .setObtainMethod(B2BWorkcardQtyDaily.ObtainMethod.PUSH.value)
+                        .setStatisticType(B2BWorkcardQtyDaily.StatisticType.IN_B2B_MULTI.value)
+                        .setIncreasedQty(agendaOrders.size())
+                        .setUpdateDate(System.currentTimeMillis())
+                        .setUpateById(B2BWorkcardQtyDaily.B2BWorkcardUpdateBy.VIOMI.id)
+                        .build();
+        b2BWorkcardQtyDailyMQSend.send(b2BWorkcardQtyDailyMessage);
+        for(AgendaOrderResponseData.AgendaOrder agendaOrder : agendaOrders){
+            String guid = agendaOrder.getGuid();
+            Long id = orderInfoMapper.findOrderByGuid(guid);
+            // 判断是否存在该工单
+            if(id == null){
+                B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+                b2BProcesslog.preInsert();
+                b2BProcesslog.setInterfaceName(VioMIUtils.GETSERVICEORDER);
+                b2BProcesslog.setInfoJson("{\"guid\":\""+guid+"\"}");
+                b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_ACCEPT.value);
+                b2BProcesslog.setProcessTime(0);
+                b2BProcesslog.setCreateById(1L);
+                b2BProcesslog.setUpdateById(1L);
+                b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDt()));
+                // 请求获取工单明细
+                ResponseBody<OrderInfoResponseData> responseBody =null;
+
+                try{
+                    // 记录原始数据
+                    b2BProcesslogMapper.insert(b2BProcesslog);
+                    b2BProcesslog.setResultJson(responseBody.getOriginalJson());
+                    // 判断是否请求成功
+                    if(responseBody != null && responseBody.getErrorCode() != null &&
+                            responseBody.getErrorCode().equals(VioMIUtils.SUCCESS_CODE)) {
+                        b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                        b2BProcesslogMapper.updateProcessFlag(b2BProcesslog);
+                        OrderInfoResponseData orderInfoResponseData = responseBody.getData();
+                        // 判断是否有工单明细
+                        if(orderInfoResponseData != null && orderInfoResponseData.getData() != null &&
+                                orderInfoResponseData.getData().size() > 0 ){
+                            // 发送计数工单队列（新工单）
+                            MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage b2BWorkcardQtyDailyMessage2 =
+                                    MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage.newBuilder()
+                                            .setUniqueId(System.currentTimeMillis() + "")
+                                            .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                                            .setObtainMethod(B2BWorkcardQtyDaily.ObtainMethod.PUSH.value)
+                                            .setStatisticType(B2BWorkcardQtyDaily.StatisticType.IN_B2B.value)
+                                            .setIncreasedQty(1)
+                                            .setUpdateDate(System.currentTimeMillis())
+                                            .setUpateById(B2BWorkcardQtyDaily.B2BWorkcardUpdateBy.VIOMI.id)
+                                            .build();
+                            b2BWorkcardQtyDailyMQSend.send(b2BWorkcardQtyDailyMessage2);
+                            VioMIOrderInfo viomiOrderInfo = orderInfoResponseData.getData().get(0);
+                            viomiOrderInfo.preInsert();
+                            viomiOrderInfo.setCreateById(1L);
+                            viomiOrderInfo.setUpdateById(1L);
+                            viomiOrderInfo.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_ACCEPT.value);
+                            viomiOrderInfo.setProcessTime(0);
+                            viomiOrderInfo.setQuarter(QuarterUtils.getQuarter(viomiOrderInfo.getCreateDt()));
+                            String remark = viomiOrderInfo.getRemark() != null ? viomiOrderInfo.getRemark() : "";
+                            remark = remark.replace("null","");
+                            viomiOrderInfo.setRemark(StringUtils.left(remark, 200));
+                            orderInfoMapper.insertOrderInfo(viomiOrderInfo);
+                            // 发送计数工单队列（成功录入工单）
+                            MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage b2BWorkcardQtyDailyMessage3=
+                                    MQB2BWorkcardQtyDailyMessage.B2BWorkcardQtyDailyMessage.newBuilder()
+                                            .setUniqueId(System.currentTimeMillis()+"")
+                                            .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                                            .setObtainMethod(B2BWorkcardQtyDaily.ObtainMethod.PUSH.value)
+                                            .setStatisticType(B2BWorkcardQtyDaily.StatisticType.IN_B2BDB.value)
+                                            .setIncreasedQty(1)
+                                            .setUpdateDate(System.currentTimeMillis())
+                                            .setUpateById(B2BWorkcardQtyDaily.B2BWorkcardUpdateBy.VIOMI.id)
+                                            .build();
+                            b2BWorkcardQtyDailyMQSend.send(b2BWorkcardQtyDailyMessage3);
+                            MQB2BOrderMessage.B2BOrderMessage.Builder builder = MQB2BOrderMessage.B2BOrderMessage.newBuilder()
+                                    .setId(viomiOrderInfo.getId())
+                                    .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                                    .setOrderNo(viomiOrderInfo.getGuid())
+                                    .setShopId(B2BShopEnum.VIOMI.id)
+                                    .setUserName(viomiOrderInfo.getNameFirst()+viomiOrderInfo.getNameLast())
+                                    .setUserMobile(viomiOrderInfo.getTelephone())
+                                    .setUserPhone(viomiOrderInfo.getTelephone1() != null ? viomiOrderInfo.getTelephone1():"")
+                                    .setUserProvince(viomiOrderInfo.getRegion())
+                                    .setUserCity(viomiOrderInfo.getCityNo())
+                                    .setUserCounty(viomiOrderInfo.getDistrctNo())
+                                    .setUserAddress(viomiOrderInfo.getStreet())
+                                    .setServiceType(viomiOrderInfo.getProcessType())
+                                    .setWarrantyType(VioMIUtils.INWARRANTY)
+                                    .setStatus(1)
+                                    .setIssueBy("")
+                                    .setDescription(viomiOrderInfo.getRemark())
+                                    .setRemarks(viomiOrderInfo.getRemark())
+                                    .setQuarter(viomiOrderInfo.getQuarter());
+                            MQB2BOrderMessage.B2BOrderItem b2BOrderItem = MQB2BOrderMessage.B2BOrderItem.newBuilder()
+                                    .setProductCode(viomiOrderInfo.getKindCode())
+                                    .setProductName("")
+                                    .setProductSpec("")
+                                    .setServiceType(viomiOrderInfo.getProcessType())
+                                    .setWarrantyType(VioMIUtils.INWARRANTY)
+                                    .setQty(1)
+                                    .build();
+                            builder.addB2BOrderItem(b2BOrderItem);
+                            MQB2BOrderMessage.B2BOrderMessage b2BOrderMessage = builder.build();
+                            //调用转单队列
+                            b2BOrderMQSender.send(b2BOrderMessage);
+                        }
+                    }else{
+                        b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+                        String error = responseBody.getErrorMsg() != null ? responseBody.getErrorMsg() :"";
+                        error = StringUtils.left(error , 200);
+                        b2BProcesslog.setProcessComment(error);
+                        b2BProcesslogMapper.updateProcessFlag(b2BProcesslog);
+                    }
+                }catch (Exception e){
+                    e.printStackTrace();
+                    log.error("新增工单失败", e.getMessage());
+                    SysLog sysLog = new SysLog();
+                    sysLog.setCreateDt(System.currentTimeMillis());
+                    sysLog.setType(1);
+                    sysLog.setCreateById(1L);
+                    sysLog.setParams(responseBody.getOriginalJson());
+                    String error = e.getMessage();
+                    error = StringUtils.left(error , 200);
+                    sysLog.setException( error );
+                    sysLog.setTitle("新增工单失败");
+                    sysLog.setQuarter(QuarterUtils.getQuarter(sysLog.getCreateDt()));
+                    sysLogMapper.insert(sysLog);
+                }
+            }
+        }
+        */
+    }
+
+    public VioMIOrderInfo findOrderInfoByGuid(String guid) {
+        return orderInfoMapper.findOrderInfoByGuid(guid);
+    }
+
+    public List<VioMIOrderInfo> findOrdersProcessFlag(List<B2BOrderTransferResult> orderNos) {
+        return orderInfoMapper.findOrdersProcessFlag(orderNos);
+    }
+
+    @Transactional
+    public void updateTransferResult(List<VioMIOrderInfo> wis) {
+        for(VioMIOrderInfo orderInfo:wis) {
+            orderInfo.preUpdate();
+            orderInfoMapper.updateTransferResult(orderInfo);
+        }
+    }
+
+    public MSPage<B2BOrder> getList(B2BOrderSearchModel workcardSearchModel) {
+        if (workcardSearchModel.getPage() != null) {
+            PageHelper.startPage(workcardSearchModel.getPage().getPageNo(), workcardSearchModel.getPage().getPageSize());
+            Page<VioMIOrderInfo> orderInfoPage = orderInfoMapper.getList(workcardSearchModel);
+            Page<B2BOrder> customerPoPage = new Page<>();
+            for(VioMIOrderInfo orderInfo:orderInfoPage){
+                B2BOrder customerPo = new B2BOrder();
+                //数据源
+                customerPo.setDataSource(B2BDataSourceEnum.VIOMI.id);
+                customerPo.setOrderNo(orderInfo.getGuid());
+                //华帝店铺
+                customerPo.setShopId(B2BShopEnum.VIOMI.id);
+                customerPo.setUserName(orderInfo.getNameFirst()+orderInfo.getNameLast());
+                customerPo.setUserMobile(orderInfo.getTelephone());
+                customerPo.setUserPhone(orderInfo.getTelephone1());
+                customerPo.setUserProvince(orderInfo.getRegion());
+                customerPo.setUserCity(orderInfo.getCityNo());
+                customerPo.setUserCounty(orderInfo.getDistrctNo());
+                customerPo.setUserAddress(orderInfo.getStreet());
+                customerPo.setServiceType(orderInfo.getProcessType());
+                customerPo.setWarrantyType(VioMIUtils.INWARRANTY);
+                String remark = orderInfo.getRemark()!=null?orderInfo.getRemark():"";
+                remark = remark.replace("null","");
+                remark = StringUtils.left(remark,200);
+                customerPo.setDescription(remark);
+                customerPo.setStatus(1);
+                customerPo.setProcessFlag(orderInfo.getProcessFlag());
+                customerPo.setProcessTime(orderInfo.getProcessTime());
+                customerPo.setProcessComment(orderInfo.getProcessComment());
+                customerPo.setQuarter(orderInfo.getQuarter());
+                //订单项
+                B2BOrder.B2BOrderItem orderItem = new B2BOrder.B2BOrderItem();
+                orderItem.setProductCode(orderInfo.getKindCode());
+                orderItem.setQty(1);
+                orderItem.setB2bWarrantyCode(VioMIUtils.INWARRANTY);
+                orderItem.setServiceType(orderInfo.getProcessType());
+                customerPo.getItems().add(orderItem);
+                customerPoPage.add(customerPo);
+            }
+            MSPage<B2BOrder> returnPage = new MSPage<>();
+            returnPage.setPageNo(orderInfoPage.getPageNum());
+            returnPage.setPageSize(orderInfoPage.getPageSize());
+            returnPage.setPageCount(orderInfoPage.getPages());
+            returnPage.setRowCount((int) orderInfoPage.getTotal());
+            returnPage.setList(customerPoPage.getResult());
+            return returnPage;
+        }else {
+            return null;
+        }
+    }
+}

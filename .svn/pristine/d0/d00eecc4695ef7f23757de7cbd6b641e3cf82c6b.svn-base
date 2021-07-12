@@ -1,0 +1,32 @@
+package com.kkl.kklplus.b2b.viomi.controller;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderHandle;
+import com.kkl.kklplus.b2b.viomi.service.VioMiOrderHandleService;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@Slf4j
+@RestController
+@RequestMapping("/order/handle")
+public class VioMiOrderHandleController {
+
+    @Autowired
+    private VioMiOrderHandleService vioMiOrderHandleService;
+
+    /**
+     * 派送师傅
+     * @param vioMiOrderHandle
+     * @return
+     */
+    @PostMapping("planing")
+    public MSResponse<Integer> planing(@RequestBody VioMiOrderHandle vioMiOrderHandle) {
+        return vioMiOrderHandleService.planing(vioMiOrderHandle);
+    }
+
+}

@@ -1,0 +1,151 @@
+package com.kkl.kklplus.b2b.viomi.service;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo;
+import com.kkl.kklplus.b2b.viomi.entity.VioMIUpdateOrder;
+import com.kkl.kklplus.b2b.viomi.http.request.ModeifyInstallOrderRequestParam;
+import com.kkl.kklplus.b2b.viomi.http.request.ModeifyRepairOrderRequestParam;
+import com.kkl.kklplus.b2b.viomi.mapper.VioMIUpdateOrderMapper;
+import com.kkl.kklplus.b2b.viomi.utils.VioMIStatusCodeEnum;
+import com.kkl.kklplus.b2b.viomi.utils.VioMIUtils;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+@Service
+@Slf4j
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public class VioMIUpdateOrderService {
+
+    @Resource
+    private VioMIUpdateOrderMapper updateOrderMapper;
+
+
+    public ModeifyInstallOrderRequestParam disposeInstallOrderMessage
+            (VioMIUpdateOrder viomiUpdateOrder, VioMIOrderInfo viomiOrderInfo) {
+        ModeifyInstallOrderRequestParam modeifyInstallOrderRequestParam = new ModeifyInstallOrderRequestParam();
+        modeifyInstallOrderRequestParam.setGuid(viomiOrderInfo.getGuid());
+        Integer kklStatus = viomiUpdateOrder.getStatus();
+        String status = VioMIStatusCodeEnum.get(kklStatus).viomiCode;
+        modeifyInstallOrderRequestParam.setStatus_CODE(status);
+        if(VioMIStatusCodeEnum.FINISH.equals(status)){
+            modeifyInstallOrderRequestParam.setOrdered_PROD(viomiOrderInfo.getKindCode());
+            modeifyInstallOrderRequestParam.setQuantity("1");
+            modeifyInstallOrderRequestParam.setUrl_PATH(viomiUpdateOrder.getUrlPath());
+            // 购买渠道
+            modeifyInstallOrderRequestParam.setZzfld00001M(viomiOrderInfo.getGmqd());
+            // 购买日期
+            modeifyInstallOrderRequestParam.setZzfld00002Y(viomiOrderInfo.getGmrq());
+            // 维修性质
+            modeifyInstallOrderRequestParam.setZzfld00003H(VioMIUtils.INWARRANTY);
+            // 网点处理结果
+            modeifyInstallOrderRequestParam.setLines_TDLINE_ZIC4(viomiUpdateOrder.getDisposeResult());
+            Long time = viomiUpdateOrder.getServiceFinishDate();
+            Date date = new Date(time);
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            // 服务完成日期
+            modeifyInstallOrderRequestParam.setZzfld00003J(simpleDateFormat.format(date));
+            // 服务完成时间
+            modeifyInstallOrderRequestParam.setZzfld00003K(VioMIUtils.returnDateCode(time));
+        }else if(VioMIStatusCodeEnum.CANCEL.equals(status)){
+            // 取消原因
+            modeifyInstallOrderRequestParam.setZzfld000060("06");
+        }else if(VioMIStatusCodeEnum.APPOINTMENT.equals(status)){
+            Integer i = updateOrderMapper.findAppointmentCount(viomiOrderInfo.getGuid());
+            // 是否改约
+            if(i>1){
+                modeifyInstallOrderRequestParam.setZzfld00004M("03");
+            }else{
+                modeifyInstallOrderRequestParam.setZzfld00004M("02");
+            }
+            // 改约原因
+            modeifyInstallOrderRequestParam.setZzfld00005Z("04");
+            Long time = viomiUpdateOrder.getAppointmentDate();
+            Date date = new Date(time);
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            // 预约日期
+            modeifyInstallOrderRequestParam.setZzfld00003J(simpleDateFormat.format(date));
+            // 预约时间
+            modeifyInstallOrderRequestParam.setZzfld00001V(VioMIUtils.returnDateCode(time));
+            // 网点跟进内容
+            modeifyInstallOrderRequestParam.setLines_TDLINE_ZICE(viomiUpdateOrder.getFollowUpContent());
+        }
+        return modeifyInstallOrderRequestParam;
+    }
+
+    public ModeifyRepairOrderRequestParam disposeRepairOrderMessage
+            (VioMIUpdateOrder viomiUpdateOrder, VioMIOrderInfo viomiOrderInfo) {
+        ModeifyRepairOrderRequestParam modeifyRepairOrderRequestParam = new ModeifyRepairOrderRequestParam();
+        modeifyRepairOrderRequestParam.setGuid(viomiOrderInfo.getGuid());
+        Integer kklStatus = viomiUpdateOrder.getStatus();
+        String status = VioMIStatusCodeEnum.get(kklStatus).viomiCode;
+        modeifyRepairOrderRequestParam.setStatus_CODE(status);
+        if(VioMIStatusCodeEnum.FINISH.equals(status)){
+            modeifyRepairOrderRequestParam.setOrdered_PROD(viomiOrderInfo.getKindCode());
+            modeifyRepairOrderRequestParam.setQuantity("1");
+            // 条形码
+            modeifyRepairOrderRequestParam.setZzfld00001R(viomiUpdateOrder.getBarCode());
+            // 购买渠道
+            modeifyRepairOrderRequestParam.setZzfld00001M(viomiOrderInfo.getGmqd());
+            // 购买日期
+            modeifyRepairOrderRequestParam.setZzfld00002Y(viomiOrderInfo.getGmrq());
+            // 维修性质
+            modeifyRepairOrderRequestParam.setZzfld00003H(VioMIUtils.INWARRANTY);
+            // 服务省份
+            modeifyRepairOrderRequestParam.setZzfld00006Y(viomiOrderInfo.getRegion());
+            // 服务城市
+            modeifyRepairOrderRequestParam.setZzfld00006Z(viomiOrderInfo.getCityNo());
+            // 服务方式
+            modeifyRepairOrderRequestParam.setZzfld00003I("01");
+            // 故障现象
+            modeifyRepairOrderRequestParam.setZzfld00005A(viomiUpdateOrder.getFailurPhen());
+            // 故障原因
+            modeifyRepairOrderRequestParam.setZzfld00005B(viomiUpdateOrder.getFailurReason());
+            // 网点处理结果
+            modeifyRepairOrderRequestParam.setLines_TDLINE_ZIC4(viomiUpdateOrder.getDisposeResult());
+            Long time = viomiUpdateOrder.getServiceFinishDate();
+            Date date = new Date(time);
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            // 服务完成日期
+            modeifyRepairOrderRequestParam.setZzfld00003J(simpleDateFormat.format(date));
+            // 服务完成时间
+            modeifyRepairOrderRequestParam.setZzfld00003K(VioMIUtils.returnDateCode(time));
+        }else if(VioMIStatusCodeEnum.CANCEL.equals(status)){
+            // 取消原因
+            modeifyRepairOrderRequestParam.setZzfld000060("06");
+        }else if(VioMIStatusCodeEnum.APPOINTMENT.equals(status)){
+            Integer i = updateOrderMapper.findAppointmentCount(viomiOrderInfo.getGuid());
+            // 改约原因
+            modeifyRepairOrderRequestParam.setZzfld00005Z("04");
+            // 是否改约
+            if(i>1){
+                modeifyRepairOrderRequestParam.setZzfld00004M("03");
+            }else{
+                modeifyRepairOrderRequestParam.setZzfld00004M("02");
+            }
+            Long time = viomiUpdateOrder.getAppointmentDate();
+            Date date = new Date(time);
+            SimpleDateFormat simpleDateFormat = new SimpleDateFormat("yyyyMMdd");
+            // 预约日期
+            modeifyRepairOrderRequestParam.setZzfld00003J(simpleDateFormat.format(date));
+            // 预约时间
+            modeifyRepairOrderRequestParam.setZzfld00001V(VioMIUtils.returnDateCode(time));
+            // 网点跟进内容
+            modeifyRepairOrderRequestParam.setLines_TDLINE_ZICE(viomiUpdateOrder.getFollowUpContent());
+        }
+        return modeifyRepairOrderRequestParam;
+    }
+
+    public void insert(VioMIUpdateOrder updateOrder) {
+        updateOrderMapper.insert(updateOrder);
+    }
+
+    public void updateProcessFlag(VioMIUpdateOrder updateOrder) {
+        updateOrder.preUpdate();
+        updateOrderMapper.updateProcessFlag(updateOrder);
+    }
+}

@@ -1,0 +1,40 @@
+{
+  "hints": [],
+  "groups": [
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi",
+      "type": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties"
+    },
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi.data-source-config",
+      "sourceMethod": "getDataSourceConfig()",
+      "type": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties$DataSourceConfig"
+    },
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi.okhttp",
+      "sourceMethod": "getOkhttp()",
+      "type": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties$OkHttpProperties"
+    },
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi.thread-pool",
+      "sourceMethod": "getThreadPool()",
+      "type": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties$ThreadPoolProperties"
+    }
+  ],
+  "properties": [
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi.app-key",
+      "type": "java.lang.String"
+    },
+    {
+      "sourceType": "com.kkl.kklplus.b2b.viomi.http.config.B2BVioMiProperties",
+      "name": "viomi.app-secret",
+      "type": "java.lang.String"
+    }
+  ]
+}

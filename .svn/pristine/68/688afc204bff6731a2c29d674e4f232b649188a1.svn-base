@@ -1,0 +1,27 @@
+package com.kkl.kklplus.b2b.viomi.http.request;
+
+import com.google.gson.annotations.SerializedName;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiHandleRequest;
+import com.kkl.kklplus.b2b.viomi.http.request.RequestParam;
+import lombok.Data;
+
+import java.io.Serializable;
+
+/**
+ * 工单办理请求
+ */
+@Data
+public class VioMiHandleOrderRequest<T> extends RequestParam {
+    /**
+     * 工单编号
+     */
+    private String orderNumber;
+    /**
+     * 办理方式
+     */
+    private VioMiHandleRequest handle;
+    /**
+     * 工单处理的参数
+     */
+    private T data;
+}

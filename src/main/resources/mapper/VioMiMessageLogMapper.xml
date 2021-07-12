@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+<mapper namespace="com.kkl.kklplus.b2b.viomi.mapper.VioMiMessageLogMapper">
+
+    <insert id="insert" parameterType="com.kkl.kklplus.b2b.viomi.entity.VioMiMessageLog" keyProperty="id"
+            useGeneratedKeys="true">
+        INSERT INTO viomi_message_log(
+			message_id,
+			create_by,
+			create_date,
+			quarter
+		) VALUES (
+			#{messageId},
+			#{createById},
+			#{createDt},
+			#{quarter}
+		)
+    </insert>
+	<update id="updateProcessFlag">
+		UPDATE
+			viomi_message_log
+		SET
+			process_flag    = #{processFlag},
+			update_date     = #{updateDt},
+			process_time = #{processTime}
+			<if test="processComment != null and processComment != ''">
+				,process_comment = #{processComment}
+			</if>
+		WHERE
+			id = #{id}
+	</update>
+	<select id="getByMessageId" resultType="com.kkl.kklplus.b2b.viomi.entity.VioMiMessageLog">
+		SELECT
+			id,
+			message_id,
+			process_flag,
+			process_time,
+			quarter
+		FROM
+			viomi_message_log
+		WHERE
+			message_id = #{messageId}
+		ORDER BY id DESC
+		LIMIT 1
+	</select>
+
+
+</mapper>

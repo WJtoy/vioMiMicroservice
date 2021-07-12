@@ -1,0 +1,21 @@
+package com.kkl.kklplus.b2b.viomi.mapper;
+
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderHandle;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface VioMiOrderHandleMapper {
+    /**
+     * 添加工单办理
+     * @param vioMiOrderHandle
+     * @return
+     */
+    Integer insert(VioMiOrderHandle vioMiOrderHandle);
+
+    /**
+     * 更新处理结果
+     * @param vioMiOrderHandle
+     * @return
+     */
+    Integer updateProcessFlag(VioMiOrderHandle vioMiOrderHandle);
+}

@@ -1,0 +1,18 @@
+package com.kkl.kklplus.b2b.viomi.http.request;
+
+import com.google.gson.annotations.SerializedName;
+import lombok.Data;
+
+import java.io.Serializable;
+
+@Data
+public class VioMiEngineer implements Serializable {
+    /**
+     * 师傅名字
+     */
+    private String engineerName;
+    /**
+     * 师傅电话
+     */
+    private String engineerPhone;
+}

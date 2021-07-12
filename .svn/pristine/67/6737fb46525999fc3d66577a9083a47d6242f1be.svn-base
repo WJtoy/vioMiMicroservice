@@ -1,0 +1,232 @@
+package com.kkl.kklplus.b2b.viomi.service;
+
+import com.google.gson.reflect.TypeToken;
+import com.kkl.kklplus.b2b.viomi.entity.VioMiOrderInfo;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiCommonRequest;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiHandleRequest;
+import com.kkl.kklplus.b2b.viomi.entity.request.VioMiOrderCancelRequest;
+import com.kkl.kklplus.b2b.viomi.entity.response.VioMiResponse;
+import com.kkl.kklplus.b2b.viomi.http.command.OperationCommand;
+import com.kkl.kklplus.b2b.viomi.http.request.HandleParam;
+import com.kkl.kklplus.b2b.viomi.http.request.OrderCancelRequestParam;
+import com.kkl.kklplus.b2b.viomi.http.response.ResponseBody;
+import com.kkl.kklplus.b2b.viomi.http.utils.OkHttpUtils;
+import com.kkl.kklplus.b2b.viomi.mapper.OrderCancelMapper;
+import com.kkl.kklplus.b2b.viomi.mq.sender.B2BCenterOrderProcessMQSend;
+import com.kkl.kklplus.b2b.viomi.utils.GsonUtils;
+import com.kkl.kklplus.b2b.viomi.utils.QuarterUtils;
+import com.kkl.kklplus.b2b.viomi.utils.VioMiUtils;
+import com.kkl.kklplus.common.exception.MSErrorCode;
+import com.kkl.kklplus.common.response.MSResponse;
+import com.kkl.kklplus.entity.b2b.common.B2BProcessFlag;
+import com.kkl.kklplus.entity.b2bcenter.md.B2BDataSourceEnum;
+import com.kkl.kklplus.entity.b2bcenter.pb.MQB2BOrderProcessMessage;
+import com.kkl.kklplus.entity.b2bcenter.rpt.B2BOrderProcesslog;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderActionEnum;
+import com.kkl.kklplus.entity.viomi.sd.VioMiOrderCancel;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.annotation.Resource;
+
+/**
+ *工单撤销Service
+ * @author chenxj
+ * @date 2020/09/21
+ */
+@Slf4j
+@Service
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
+public class OrderCancelService {
+
+    @Autowired
+    private B2BProcesslogService b2BProcesslogService;
+
+    @Autowired
+    private OrderInfoService orderInfoService;
+
+    @Autowired
+    private SysLogService sysLogService;
+
+    @Autowired
+    private B2BCenterOrderProcessMQSend orderProcessMQSend;
+
+    @Resource
+    private OrderCancelMapper orderCancelMapper;
+
+
+    public VioMiResponse cancelOrder(String json) {
+        B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+        b2BProcesslog.setInterfaceName("cancelOrder");
+        b2BProcesslog.setInfoJson(json);
+        b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_ACCEPT.value);
+        b2BProcesslog.setProcessTime(0);
+        b2BProcesslog.setCreateById(1L);
+        b2BProcesslog.setUpdateById(1L);
+        b2BProcesslog.preInsert();
+        b2BProcesslog.setQuarter(QuarterUtils.getQuarter(b2BProcesslog.getCreateDt()));
+        b2BProcesslogService.insert(b2BProcesslog);
+        VioMiCommonRequest<VioMiOrderCancelRequest> request = GsonUtils.getInstance().fromUnderscoresJson
+                (json, new TypeToken<VioMiCommonRequest<VioMiOrderCancelRequest>>() {
+                }.getType());
+        VioMiOrderCancelRequest data = request.getData();
+        VioMiResponse response = validateOrderCancel(data);
+
+        if(response.getRes() == 0){
+            VioMiOrderInfo orderInfo = orderInfoService.getOrderByOrderNumber(data.getOrderNumber());
+            if(orderInfo == null){
+                response.setRes(VioMiUtils.FAILURE_CODE);
+                response.setMsg("没找到对应单据");
+                return response;
+            }
+
+            Long kklOrderId = orderInfo.getKklOrderId();
+            VioMiOrderCancel cancel = parseEntity(data);
+            cancel.setB2bOrderId(orderInfo.getId());
+            orderCancelMapper.insert(cancel);
+            if(kklOrderId != null && kklOrderId > 0) {
+                sendOrderCancelMQ(cancel,kklOrderId);
+            }
+        }
+        return response;
+    }
+
+    private void sendOrderCancelMQ(VioMiOrderCancel cancel,Long kklOrderId) {
+        MQB2BOrderProcessMessage.B2BOrderProcessMessage processMessage =
+                MQB2BOrderProcessMessage.B2BOrderProcessMessage.newBuilder()
+                        .setMessageId(cancel.getId())
+                        .setB2BOrderNo(cancel.getOrderNumber())
+                        .setKklOrderId(kklOrderId)
+                        .setB2BOrderId(cancel.getB2bOrderId())
+                        .setActionType(B2BOrderActionEnum.RETURN_APPLY.value)
+                        .setDataSource(B2BDataSourceEnum.VIOMI.id)
+                        .setRemarks(StringUtils.trimToEmpty(cancel.getRemarks())).build();
+        orderProcessMQSend.send(processMessage);
+    }
+
+    private VioMiOrderCancel parseEntity(VioMiOrderCancelRequest data) {
+        VioMiOrderCancel vioMiOrderCancel = new VioMiOrderCancel();
+        vioMiOrderCancel.setType(1);
+        vioMiOrderCancel.setOperator(data.getHandle().getOperator());
+        vioMiOrderCancel.setReason(data.getHandle().getReason());
+        vioMiOrderCancel.setRemarks(data.getHandle().getRemarks());
+        vioMiOrderCancel.setOrderNumber(data.getOrderNumber());
+        vioMiOrderCancel.setCreateById(1L);
+        vioMiOrderCancel.preInsert();
+        vioMiOrderCancel.setQuarter(QuarterUtils.getQuarter(vioMiOrderCancel.getCreateDt()));
+        return vioMiOrderCancel;
+    }
+
+    private VioMiResponse validateOrderCancel(VioMiOrderCancelRequest data) {
+        VioMiResponse response = new VioMiResponse();
+        String orderNumber = data.getOrderNumber();
+        if(StringUtils.isBlank(orderNumber)){
+            response.setRes(VioMiUtils.FAILURE_CODE);
+            response.setMsg("工单编号不能为空");
+            return response;
+        }
+        VioMiHandleRequest handle = data.getHandle();
+        if(handle == null){
+            response.setRes(VioMiUtils.FAILURE_CODE);
+            response.setMsg("办理方式不能为空");
+            return response;
+        }
+        String reason = handle.getReason();
+        if(StringUtils.isBlank(reason)){
+            response.setRes(VioMiUtils.FAILURE_CODE);
+            response.setMsg("工单撤销原因不能为空");
+            return response;
+        }
+        return response;
+    }
+
+    public MSResponse cancelApiRequest(VioMiOrderCancel cancel) {
+        MSResponse msResponse = new MSResponse();
+        Long b2bOrderId = cancel.getB2bOrderId();
+        if(cancel == null || b2bOrderId == null || b2bOrderId == 0) {
+            msResponse.setErrorCode(MSErrorCode.FAILURE);
+            msResponse.setMsg("信息不能为空!");
+            return msResponse;
+        }
+        msResponse.setErrorCode(MSErrorCode.SUCCESS);
+        B2BOrderProcesslog b2BProcesslog = new B2BOrderProcesslog();
+        b2BProcesslog.setInterfaceName(OperationCommand.OperationCode.OTHER_CANCEL_ORDER.apiUrl);
+        b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+        b2BProcesslog.setProcessTime(0);
+        b2BProcesslog.setCreateById(cancel.getCreateById());
+        b2BProcesslog.setUpdateById(cancel.getCreateById());
+        b2BProcesslog.preInsert();
+        b2BProcesslog.setQuarter(com.kkl.kklplus.utils.QuarterUtils.getQuarter(b2BProcesslog.getCreateDate()));
+        OrderCancelRequestParam reqBody = new OrderCancelRequestParam();
+        reqBody.setOrderNumber(cancel.getOrderNumber());
+        HandleParam handleParam = new HandleParam();
+        handleParam.setWay("工单撤销");
+        handleParam.setOperator(cancel.getOperator());
+        handleParam.setReason(cancel.getReason());
+        handleParam.setRemarks(cancel.getRemarks());
+        reqBody.setHandle(handleParam);
+        OperationCommand command = OperationCommand.newInstance
+                (OperationCommand.OperationCode.OTHER_CANCEL_ORDER, reqBody);
+        ResponseBody<ResponseBody> resBody = OkHttpUtils.postSyncGenericNew(command, ResponseBody.class);
+        String infoJson = GsonUtils.getInstance().toUnderscoresJson(reqBody);
+        b2BProcesslog.setInfoJson(infoJson);
+        try {
+            b2BProcesslogService.insert(b2BProcesslog);
+            b2BProcesslog.setResultJson(resBody.getOriginalJson());
+            orderCancelMapper.insert(cancel);
+            ResponseBody data = resBody.getData();
+            if( resBody.getErrorCode() == ResponseBody.ErrorCode.SUCCESS.code && data != null){
+                // 0 -- 成功
+                if (data.getErrorCode().equals(VioMiUtils.SUCCESS_CODE)) {
+                    b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+                    cancel.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+                    cancel.preUpdate();
+                    orderCancelMapper.updateProcessFlag(cancel);
+                    msResponse.setMsg(data.getErrorMsg());
+                    return msResponse;
+                }
+            }
+            // 1：签名无效 2：参数有误3：流程错误 4：办理方式错误 5：办理参数有误 6：验收码错误 7：SN码有误
+            String errorStr = data != null ? data.getErrorMsg() : resBody.getErrorMsg();
+            Integer errorCode = data != null ? data.getErrorCode() : resBody.getErrorCode();
+            errorStr = StringUtils.left(errorStr,255);
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(errorStr);
+            cancel.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            cancel.setProcessComment(errorStr);
+            cancel.preUpdate();
+            msResponse.setThirdPartyErrorCode(new MSErrorCode(errorCode,errorStr));
+            //errorCode大于等于90000300，设置错误编码，便于调用方重试
+            if(errorCode >= ResponseBody.ErrorCode.REQUEST_INVOCATION_FAILURE.code){
+                msResponse.setCode(errorCode);
+                msResponse.setMsg(errorStr);
+            }
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+            orderCancelMapper.updateProcessFlag(cancel);
+        }catch (Exception e) {
+            msResponse.setErrorCode(MSErrorCode.FAILURE);
+            msResponse.setMsg(StringUtils.left(e.getMessage(),200));
+            b2BProcesslog.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_FAILURE.value);
+            b2BProcesslog.setProcessComment(e.getMessage());
+            b2BProcesslogService.updateProcessFlag(b2BProcesslog);
+            String errorStr = "工单撤销失败，原因是：";
+            log.error(errorStr, e.getMessage());
+            sysLogService.insert(1L,infoJson,errorStr + e.getMessage(),
+                    errorStr, OperationCommand.OperationCode.OTHER_CANCEL_ORDER.apiUrl, "POST");
+        }
+        return msResponse;
+    }
+
+    public void updateProcessFlag(Long id) {
+        VioMiOrderCancel vioMiOrderCancel = new VioMiOrderCancel();
+        vioMiOrderCancel.setId(id);
+        vioMiOrderCancel.setProcessFlag(B2BProcessFlag.PROCESS_FLAG_SUCESS.value);
+        vioMiOrderCancel.preUpdate();
+        orderCancelMapper.updateProcessFlag(vioMiOrderCancel);
+    }
+}

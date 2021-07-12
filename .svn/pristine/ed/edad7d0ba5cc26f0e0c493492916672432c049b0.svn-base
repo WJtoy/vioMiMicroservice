@@ -1,0 +1,32 @@
+package com.kkl.kklplus.b2b.viomi.mapper;
+
+
+import com.github.pagehelper.Page;
+import com.kkl.kklplus.b2b.viomi.entity.VioMIOrderInfo;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderSearchModel;
+import com.kkl.kklplus.entity.b2bcenter.sd.B2BOrderTransferResult;
+import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.util.List;
+
+@Mapper
+public interface VioMIOrderInfoMapper {
+
+    /**
+     * 查询是否存在该工单
+     * @param guid
+     * @return
+     */
+    Long findOrderByGuid(@Param("guid")String guid);
+
+    void insertOrderInfo(VioMIOrderInfo orderInfo);
+
+    VioMIOrderInfo findOrderInfoByGuid(@Param("guid")String guid);
+
+    List<VioMIOrderInfo> findOrdersProcessFlag(@Param("orderNos") List<B2BOrderTransferResult> orderNos);
+
+    void updateTransferResult(VioMIOrderInfo wis);
+
+    Page<VioMIOrderInfo> getList(B2BOrderSearchModel workcardSearchModel);
+}

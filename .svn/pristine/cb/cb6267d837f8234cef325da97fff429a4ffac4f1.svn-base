@@ -1,0 +1,111 @@
+---
+server:
+  port: 8920
+spring:
+  profiles: dev
+  application:
+    name: kklplus-b2b-viomi
+  datasource:
+    druid:
+      driver-class-name: com.mysql.jdbc.Driver
+      url: jdbc:mysql://119.23.43.232:18355/kklplus_b2b_viomi?useUnicode=true&characterEncoding=utf-8&allowMultiQueries=true&useSSL=false
+      username: b2bviomi
+      password: vt.123.b
+      # 初始化大小，最小，最大
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+      # 配置获取连接等待超时的时间
+      max-wait: 59000
+      # 配置间隔多久才进行一次检测，检测需要关闭的空闲连接，单位是毫秒
+      time-between-eviction-runs-millis: 50000
+      # 配置一个连接在池中最小生存的时间，单位是毫秒
+      min-evictable-idle-time-millis: 300000
+      #检测连接是否有效的sql
+      validation-query: SELECT 1
+      test-while-idle: true
+      test-on-borrow: false
+      test-on-return: false
+      # PSCache Mysql下建议关闭
+      pool-prepared-statements: false
+      max-pool-prepared-statement-per-connection-size: -1
+  redis:
+      database: 1
+      host: 127.0.0.1
+      port: 6379
+      password: 123456
+      timeout: 0
+      pool:
+        max-active: 1000
+        max-wait: -1
+        max-idle: 100
+        min-idle: 0
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    publisher-confirms: true
+    cache:
+      connection:
+        mode: channel
+    listener:
+      simple:
+        auto-startup: true
+        acknowledge-mode: manual
+        concurrency: 1
+        max-concurrency: 1
+        prefetch: 1
+    template:
+      retry:
+        initial-interval: 5000
+        max-attempts: 3
+        max-interval: 50000
+        multiplier: 1
+eureka:
+  instance:
+    prefer-ip-address: true
+    metadata-map:
+      zone: dev
+      function: kklplus-b2b-viomi
+  client:
+    serviceUrl:
+      defaultZone: http://dev:dev.123@localhost:8800/eureka/
+    healthcheck:
+      enabled: true
+info:
+  app:
+    name: ${spring.application.name}
+    desc: B2B 云米服务
+  version: '0.0.1'
+management:
+  security:
+    enabled: false
+    roles: SUPERUSER
+mybatis:
+  type-aliases-package: com.kkl.kklplus.entity.viomi
+  mapper-locations: classpath*:/mapper/**/*Mapper.xml
+  configuration:
+    cache-enabled: true
+    map-underscore-to-camel-case: true
+logging:
+  level:
+    org.mybatis: debug
+    com.kkl.kklplus: debug
+pagehelper:
+  helper-dialect: mysql
+  reasonable: true
+  support-methods-arguments: true
+  params: count=countSql
+viomi:
+  okhttp:
+    connect-timeout: 10
+    read-timeout: 10
+    write-timeout: 10
+    ping-interval: 0
+    retry-on-connection-failure: true
+  data-source-config:
+    request-main-url: http://demo.doscs.com/demo/yunmi/oa/api/
+    kry: 6f1-b433-b1-064b653
+    appsecret: f1-jg19-90c0ULhmtG
+    scheduleEnabled: true
